@@ -167,17 +167,22 @@ def generate_perturbs(args):
     for idx in tqdm.tqdm(range(n_samples), desc=f"Perturb text"):
         original_text = data["original"][idx]
         sampled_text = data["sampled"][idx]
+        augmented_text = data["augmented"][idx]  # Augmented data added here
         # perturb
         p_sampled_text = perturb_texts(args, mask_model, mask_tokenizer, [sampled_text for _ in range(n_perturbations)])
+        p_augmented_text = perturb_texts(args, mask_model, mask_tokenizer, [augmented_text for _ in range(n_perturbations)])
         p_original_text = perturb_texts(args, mask_model, mask_tokenizer, [original_text for _ in range(n_perturbations)])
         assert len(p_sampled_text) == n_perturbations, f"Expected {n_perturbations} perturbed samples, got {len(p_sampled_text)}"
+        assert len(p_augmented_text) == n_perturbations, f"Expected {n_perturbations} perturbed samples, got {len(p_augmented_text)}"
         assert len(p_original_text) == n_perturbations, f"Expected {n_perturbations} perturbed samples, got {len(p_original_text)}"
         # result
         perturbs.append({
             "original": original_text,
             "sampled": sampled_text,
+            "augmented": augmented_text,  
+            "perturbed_original": p_original_text,
             "perturbed_sampled": p_sampled_text,
-            "perturbed_original": p_original_text
+            "perturbed_augmented": p_augmented_text
         })
 
     save_data(f'{args.dataset_file}.{args.mask_filling_model_name}.{name}', args, perturbs)
@@ -208,26 +213,35 @@ def experiment(args):
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = results[idx]["original"]
         sampled_text = results[idx]["sampled"]
+        augmented_text = results[idx]["augmented"]  # Augmented data added here
         perturbed_original = results[idx]["perturbed_original"]
         perturbed_sampled = results[idx]["perturbed_sampled"]
+        perturbed_augmented = results[idx]["perturbed_augmented"]
         # original text
         original_ll = get_ll(args, scoring_model, scoring_tokenizer, original_text)
         p_original_ll = get_lls(args, scoring_model, scoring_tokenizer, perturbed_original)
         # sampled text
         sampled_ll = get_ll(args, scoring_model, scoring_tokenizer, sampled_text)
         p_sampled_ll = get_lls(args, scoring_model, scoring_tokenizer, perturbed_sampled)
+        # augmented text
+        augmented_ll = get_ll(args, scoring_model, scoring_tokenizer, augmented_text)
+        p_augmented_ll = get_lls(args, scoring_model, scoring_tokenizer, perturbed_augmented)
         # result
         results[idx]["original_ll"] = original_ll
         results[idx]["sampled_ll"] = sampled_ll
-        results[idx]["all_perturbed_sampled_ll"] = p_sampled_ll
+        results[idx]["augmented_ll"] = augmented_ll
         results[idx]["all_perturbed_original_ll"] = p_original_ll
-        results[idx]["perturbed_sampled_ll"] = np.mean(p_sampled_ll)
+        results[idx]["all_perturbed_sampled_ll"] = p_sampled_ll
+        results[idx]["all_perturbed_augmented_ll"] = p_augmented_ll
         results[idx]["perturbed_original_ll"] = np.mean(p_original_ll)
-        results[idx]["perturbed_sampled_ll_std"] = np.std(p_sampled_ll) if len(p_sampled_ll) > 1 else 1
+        results[idx]["perturbed_sampled_ll"] = np.mean(p_sampled_ll)
+        results[idx]["perturbed_augmented_ll"] = np.mean(p_augmented_ll)
         results[idx]["perturbed_original_ll_std"] = np.std(p_original_ll) if len(p_original_ll) > 1 else 1
+        results[idx]["perturbed_sampled_ll_std"] = np.std(p_sampled_ll) if len(p_sampled_ll) > 1 else 1
+        results[idx]["perturbed_augmented_ll_std"] = np.std(p_augmented_ll) if len(p_augmented_ll) > 1 else 1
 
     # compute diffs with perturbed
-    predictions = {'real': [], 'samples': []}
+    predictions = {'real': [], 'samples': [], 'augmented': []}
     for res in results:
         if res['perturbed_original_ll_std'] == 0:
             res['perturbed_original_ll_std'] = 1
@@ -239,13 +253,28 @@ def experiment(args):
             print("WARNING: std of perturbed sampled is 0, setting to 1")
             print(f"Number of unique perturbed sampled texts: {len(set(res['perturbed_sampled']))}")
             print(f"Sampled text: {res['sampled']}")
+        if res['perturbed_augmented_ll_std'] == 0:
+            res['perturbed_augmented_ll_std'] = 1
+            print("WARNING: std of perturbed augmented is 0, setting to 1")
+            print(f"Number of unique perturbed augmented texts: {len(set(res['perturbed_augmented']))}")
+            print(f"Augmented text: {res['augmented']}")
+
         predictions['real'].append((res['original_ll'] - res['perturbed_original_ll']) / res['perturbed_original_ll_std'])
         predictions['samples'].append((res['sampled_ll'] - res['perturbed_sampled_ll']) / res['perturbed_sampled_ll_std'])
+        predictions['augmented'].append((res['augmented_ll'] - res['perturbed_augmented_ll']) / res['perturbed_augmented_ll_std'])
 
-    print(f"Real mean/std: {np.mean(predictions['real']):.2f}/{np.std(predictions['real']):.2f}, Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}")
+    print(f"Real mean/std: {np.mean(predictions['real']):.2f}/{np.std(predictions['real']):.2f}, "
+        f"Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}, "
+        f"Augmented mean/std: {np.mean(predictions['augmented']):.2f}/{np.std(predictions['augmented']):.2f}")
+
     fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
     p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
+
+    fpr2, tpr2, roc_auc2 = get_roc_metrics(predictions['real'], predictions['augmented'])
+    p2, r2, pr_auc2 = get_precision_recall_metrics(predictions['real'], predictions['augmented'])
+
     print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
+    print(f"Criterion {name}_threshold ROC AUC augmented: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
 
     # results
     results_file = f'{args.output_file}.{name}.json'
@@ -270,6 +299,17 @@ def experiment(args):
             'recall': r,
         },
         'loss': 1 - pr_auc,
+        'metrics augmented': {
+            'roc_auc2': roc_auc2, 
+            'fpr2': fpr2, 
+            'tpr2': tpr2
+        },
+        'pr_metrics augmented': {
+            'pr_auc2': pr_auc2, 
+            'precision2': p2, 
+            'recall2': r2
+        },
+        'loss augmented': 1 - pr_auc2
     }
     with open(results_file, 'w') as fout:
         json.dump(results, fout)

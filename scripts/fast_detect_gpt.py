@@ -172,8 +172,8 @@ def experiment(args):
     fpr2, tpr2, roc_auc2 = get_roc_metrics(predictions['real'], predictions['augmented'])
     p2, r2, pr_auc2 = get_precision_recall_metrics(predictions['real'], predictions['augmented'])
 
-    print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
-    print(f"Criterion {name}_threshold ROC AUC 2: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
+    print(f"Criterion {name}_threshold ROC AUC sampled: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
+    print(f"Criterion {name}_threshold ROC AUC augmented: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
     
     # Results
     results_file = f'{args.output_file}.{name}.json'
@@ -185,19 +185,14 @@ def experiment(args):
         'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
         'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
         'loss': 1 - pr_auc,
-        'metrics2': {'roc_auc2': roc_auc2, 'fpr2': fpr2, 'tpr2': tpr2},
-        'pr_metrics2': {'pr_auc2': pr_auc2, 'precision2': p2, 'recall2': r2},
-        'loss2': 1 - pr_auc2
+        'metrics augmented': {'roc_auc2': roc_auc2, 'fpr2': fpr2, 'tpr2': tpr2},
+        'pr_metrics augmented': {'pr_auc2': pr_auc2, 'precision2': p2, 'recall2': r2},
+        'loss augmented': 1 - pr_auc2
     }
     
     with open(results_file, 'w') as fout:
         json.dump(results, fout)
         print(f'Results written into {results_file}')
-
-
-    fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
-    p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
-    print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
 
 
 if __name__ == '__main__':

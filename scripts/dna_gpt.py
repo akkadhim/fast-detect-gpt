@@ -160,31 +160,53 @@ def experiment(args):
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = data["original"][idx]
         sampled_text = data["sampled"][idx]
+        augmented_text = data["augmented"][idx]
         # original text
         original_crit = criterion_fn(sampler, original_text)
         # sampled text
         sampled_crit = criterion_fn(sampler, sampled_text)
+        # augmented text
+        augmented_crit = criterion_fn(sampler, augmented_text)
         # result
-        results.append({"original": original_text,
-                        "original_crit": original_crit,
-                        "sampled": sampled_text,
-                        "sampled_crit": sampled_crit})
+        results.append({
+            "original": original_text,
+            "original_crit": original_crit,
+            "sampled": sampled_text,
+            "sampled_crit": sampled_crit,
+            "augmented": augmented_text,  
+            "augmented_crit": augmented_crit  
+        })
 
     # compute prediction scores for real/sampled passages
-    predictions = {'real': [x["original_crit"] for x in results],
-                   'samples': [x["sampled_crit"] for x in results]}
+    predictions = {
+        'real': [x["original_crit"] for x in results],
+        'samples': [x["sampled_crit"] for x in results],
+        'augmented': [x["augmented_crit"] for x in results]  # Add augmented predictions
+    }
+
     fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
     p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
+
+    fpr2, tpr2, roc_auc2 = get_roc_metrics(predictions['real'], predictions['augmented'])
+    p2, r2, pr_auc2 = get_precision_recall_metrics(predictions['real'], predictions['augmented'])
+
     print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
+    print(f"Criterion {name}_threshold ROC AUC augmented: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
+
     # results
     results_file = f'{args.output_file}.{name}.json'
-    results = { 'name': f'{name}_threshold',
-                'info': {'n_samples': n_samples},
-                'predictions': predictions,
-                'raw_results': results,
-                'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
-                'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
-                'loss': 1 - pr_auc}
+    results = { 
+        'name': f'{name}_threshold',
+        'info': {'n_samples': n_samples},
+        'predictions': predictions,
+        'raw_results': results,
+        'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
+        'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
+        'loss': 1 - pr_auc,
+        'metrics augmented': {'roc_auc2': roc_auc2, 'fpr2': fpr2, 'tpr2': tpr2},
+        'pr_metrics augmented': {'pr_auc2': pr_auc2, 'precision2': p2, 'recall2': r2},
+        'loss augmented': 1 - pr_auc2
+    }
     with open(results_file, 'w') as fout:
         json.dump(results, fout)
         print(f'Results written into {results_file}')

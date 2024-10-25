@@ -85,31 +85,53 @@ def experiment(args):
         for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
             original_text = data[idx]["original"]
             sampled_text = data[idx]["sampled"]
+            augmented_text = data[idx]["augmented"]  # Augmented data added here
+
             perturbed_original = data[idx]["perturbed_original"]
             perturbed_sampled = data[idx]["perturbed_sampled"]
+            perturbed_augmented = data[idx]["perturbed_augmented"]
+            
             original_crit = criterion_fn(args, scoring_model, scoring_tokenizer, original_text, perturbed_original)
             sampled_crit = criterion_fn(args, scoring_model, scoring_tokenizer, sampled_text, perturbed_sampled)
+            augmented_crit = criterion_fn(args, scoring_model, scoring_tokenizer, augmented_text, perturbed_augmented)
             # result
-            eval_results.append({"original": original_text,
-                            "original_crit": original_crit,
-                            "sampled": sampled_text,
-                            "sampled_crit": sampled_crit})
+            eval_results.append({
+                "original": original_text,
+                "original_crit": original_crit,
+                "sampled": sampled_text,
+                "sampled_crit": sampled_crit,
+                "augmented": augmented_text,  
+                "augmented_crit": augmented_crit  
+            })
 
         # compute prediction scores for real/sampled passages
         predictions = {'real': [x["original_crit"] for x in eval_results],
-                       'samples': [x["sampled_crit"] for x in eval_results]}
+                       'samples': [x["sampled_crit"] for x in eval_results],
+                        'augmented': [x["augmented_crit"] for x in eval_results]  # Add augmented predictions
+                       }
         fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
         p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
+
+        fpr2, tpr2, roc_auc2 = get_roc_metrics(predictions['real'], predictions['augmented'])
+        p2, r2, pr_auc2 = get_precision_recall_metrics(predictions['real'], predictions['augmented'])
+
         print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
+        print(f"Criterion {name}_threshold ROC AUC augmented: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
+
         # log results
         results_file = f'{args.output_file}.{name}.json'
-        results = { 'name': f'{name}_threshold',
-                    'info': {'n_samples': n_samples},
-                    'predictions': predictions,
-                    'raw_results': eval_results,
-                    'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
-                    'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
-                    'loss': 1 - pr_auc}
+        results = { 
+            'name': f'{name}_threshold',
+            'info': {'n_samples': n_samples},
+            'predictions': predictions,
+            'raw_results': eval_results,
+            'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
+            'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
+            'loss': 1 - pr_auc,
+            'metrics augmented': {'roc_auc2': roc_auc2, 'fpr2': fpr2, 'tpr2': tpr2},
+            'pr_metrics augmented': {'pr_auc2': pr_auc2, 'precision2': p2, 'recall2': r2},
+            'loss augmented': 1 - pr_auc2
+        }
         with open(results_file, 'w') as fout:
             json.dump(results, fout)
             print(f'Results written into {results_file}')
