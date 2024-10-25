@@ -70,18 +70,21 @@ def get_sampling_discrepancy_analytic(logits_ref, logits_score, labels):
     return discrepancy.item()
 
 def experiment(args):
-    # load model
+    # Load model
     scoring_tokenizer = load_tokenizer(args.scoring_model_name, args.dataset, args.cache_dir)
     scoring_model = load_model(args.scoring_model_name, args.device, args.cache_dir)
     scoring_model.eval()
+
     if args.reference_model_name != args.scoring_model_name:
         reference_tokenizer = load_tokenizer(args.reference_model_name, args.dataset, args.cache_dir)
         reference_model = load_model(args.reference_model_name, args.device, args.cache_dir)
         reference_model.eval()
-    # load data
+
+    # Load data
     data = load_data(args.dataset_file)
     n_samples = len(data["sampled"])
-    # evaluate criterion
+
+    # Evaluate criterion
     if args.discrepancy_analytic:
         name = "sampling_discrepancy_analytic"
         criterion_fn = get_sampling_discrepancy_analytic
@@ -92,59 +95,110 @@ def experiment(args):
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
+    
     results = []
+
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = data["original"][idx]
         sampled_text = data["sampled"][idx]
-        # original text
+        augmented_text = data["augmented"][idx]  # Augmented data added here
+        
+        # ----- Original text -----
         tokenized = scoring_tokenizer(original_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
         labels = tokenized.input_ids[:, 1:]
+
         with torch.no_grad():
             logits_score = scoring_model(**tokenized).logits[:, :-1]
             if args.reference_model_name == args.scoring_model_name:
                 logits_ref = logits_score
             else:
                 tokenized = reference_tokenizer(original_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
-                assert torch.all(tokenized.input_ids[:, 1:] == labels), "Tokenizer is mismatch."
+                assert torch.all(tokenized.input_ids[:, 1:] == labels), "Tokenizer mismatch."
                 logits_ref = reference_model(**tokenized).logits[:, :-1]
             original_crit = criterion_fn(logits_ref, logits_score, labels)
-        # sampled text
+        
+        # ----- Sampled text -----
         tokenized = scoring_tokenizer(sampled_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
         labels = tokenized.input_ids[:, 1:]
+
         with torch.no_grad():
             logits_score = scoring_model(**tokenized).logits[:, :-1]
             if args.reference_model_name == args.scoring_model_name:
                 logits_ref = logits_score
             else:
                 tokenized = reference_tokenizer(sampled_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
-                assert torch.all(tokenized.input_ids[:, 1:] == labels), "Tokenizer is mismatch."
+                assert torch.all(tokenized.input_ids[:, 1:] == labels), "Tokenizer mismatch."
                 logits_ref = reference_model(**tokenized).logits[:, :-1]
             sampled_crit = criterion_fn(logits_ref, logits_score, labels)
-        # result
-        results.append({"original": original_text,
-                        "original_crit": original_crit,
-                        "sampled": sampled_text,
-                        "sampled_crit": sampled_crit})
+        
+        # ----- Augmented text -----
+        tokenized = scoring_tokenizer(augmented_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
+        labels = tokenized.input_ids[:, 1:]
 
-    # compute prediction scores for real/sampled passages
-    predictions = {'real': [x["original_crit"] for x in results],
-                   'samples': [x["sampled_crit"] for x in results]}
-    print(f"Real mean/std: {np.mean(predictions['real']):.2f}/{np.std(predictions['real']):.2f}, Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}")
+        with torch.no_grad():
+            logits_score = scoring_model(**tokenized).logits[:, :-1]
+            if args.reference_model_name == args.scoring_model_name:
+                logits_ref = logits_score
+            else:
+                tokenized = reference_tokenizer(augmented_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
+                assert torch.all(tokenized.input_ids[:, 1:] == labels), "Tokenizer mismatch."
+                logits_ref = reference_model(**tokenized).logits[:, :-1]
+            augmented_crit = criterion_fn(logits_ref, logits_score, labels)
+
+        # Append results
+        results.append({
+            "original": original_text,
+            "original_crit": original_crit,
+            "sampled": sampled_text,
+            "sampled_crit": sampled_crit,
+            "augmented": augmented_text,  
+            "augmented_crit": augmented_crit  
+        })
+
+    # Compute prediction scores for real/sampled/augmented passages
+    predictions = {
+        'real': [x["original_crit"] for x in results],
+        'samples': [x["sampled_crit"] for x in results],
+        'augmented': [x["augmented_crit"] for x in results]  # Add augmented predictions
+    }
+
+    print(f"Real mean/std: {np.mean(predictions['real']):.2f}/{np.std(predictions['real']):.2f}, "
+          f"Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}, "
+          f"Augmented mean/std: {np.mean(predictions['augmented']):.2f}/{np.std(predictions['augmented']):.2f}")
+
     fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
     p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
+
+    fpr2, tpr2, roc_auc2 = get_roc_metrics(predictions['real'], predictions['augmented'])
+    p2, r2, pr_auc2 = get_precision_recall_metrics(predictions['real'], predictions['augmented'])
+
     print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
-    # results
+    print(f"Criterion {name}_threshold ROC AUC 2: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
+    
+    # Results
     results_file = f'{args.output_file}.{name}.json'
-    results = { 'name': f'{name}_threshold',
-                'info': {'n_samples': n_samples},
-                'predictions': predictions,
-                'raw_results': results,
-                'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
-                'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
-                'loss': 1 - pr_auc}
+    results = {
+        'name': f'{name}_threshold',
+        'info': {'n_samples': n_samples},
+        'predictions': predictions,
+        'raw_results': results,
+        'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
+        'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
+        'loss': 1 - pr_auc,
+        'metrics2': {'roc_auc2': roc_auc2, 'fpr2': fpr2, 'tpr2': tpr2},
+        'pr_metrics2': {'pr_auc2': pr_auc2, 'precision2': p2, 'recall2': r2},
+        'loss2': 1 - pr_auc2
+    }
+    
     with open(results_file, 'w') as fout:
         json.dump(results, fout)
         print(f'Results written into {results_file}')
+
+
+    fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
+    p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
+    print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

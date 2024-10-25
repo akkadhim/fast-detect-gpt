@@ -13,6 +13,7 @@ import os
 import json
 import custom_datasets
 from model import load_tokenizer, load_model
+from eda import *
 
 
 def save_data(output_file, args, data):
@@ -150,15 +151,29 @@ class DataBuilder:
                 tries += 1
 
         return decoded
+    
+    def _sample_from_embedding(self, texts, num_aug): 
+        alpha_sr = 0.1
+        alpha_ri = 0
+        alpha_rs = 0
+        alpha_rd = 0 
+        sentences = texts.split('. ')
+        aug_text = '' 
+        for sentence in sentences:
+            aug_sentences = eda(sentence, alpha_sr=alpha_sr, alpha_ri=alpha_ri, alpha_rs=alpha_rs, p_rd=alpha_rd, num_aug=num_aug)
+            for aug_sentence in aug_sentences:
+                aug_text = aug_text + ' ' + aug_sentence + '.'
+        return aug_text
 
     def generate_samples(self, raw_data, batch_size):
         # trim to shorter length
-        def _trim_to_shorter_length(texta, textb):
+        def _trim_to_shorter_length(texta, textb, textc):
             # truncate to shorter of o and s
-            shorter_length = min(len(texta.split(' ')), len(textb.split(' ')))
+            shorter_length = min(len(texta.split(' ')), len(textb.split(' ')), len(textc.split(' ')))
             texta = ' '.join(texta.split(' ')[:shorter_length])
             textb = ' '.join(textb.split(' ')[:shorter_length])
-            return texta, textb
+            textc = ' '.join(textc.split(' ')[:shorter_length])
+            return texta, textb, textc
 
         def _truncate_to_substring(text, substring, idx_occurrence):
             # truncate everything after the idx_occurrence occurrence of substring
@@ -179,17 +194,21 @@ class DataBuilder:
             print('Generating samples for batch', batch, 'of', len(raw_data) // batch_size)
             original_text = raw_data[batch * batch_size:(batch + 1) * batch_size]
             sampled_text = self._sample_from_model(original_text, min_words=30 if self.args.dataset in ['pubmed'] else 55)
+            augmented_text = self._sample_from_embedding(sampled_text, num_aug=5)
 
-            for o, s in zip(original_text, sampled_text):
+            for o, s, a in zip(original_text, sampled_text, augmented_text):
                 if self.args.dataset == 'pubmed':
                     s = _truncate_to_substring(s, 'Question:', 2)
+                    a = _truncate_to_substring(a, 'Question:', 2)
                     o = o.replace(custom_datasets.SEPARATOR, ' ')
-
-                o, s = _trim_to_shorter_length(o, s)
-
-                # add to the data
+                
+                # Trim the original and sampled texts to match lengths
+                o, s, a = _trim_to_shorter_length(o, s, a)
+                
+                # Add to the data
                 data["original"].append(o)
                 data["sampled"].append(s)
+                data["augmented"].append(a)
 
         return data
 
