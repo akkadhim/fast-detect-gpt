@@ -152,18 +152,20 @@ class DataBuilder:
 
         return decoded
     
-    def _sample_from_embedding(self, texts, num_aug): 
-        alpha_sr = 0.1
+    def _sample_from_embedding(self, texts): 
+        alpha_sr = 0.1 # percentage of augmentation
         alpha_ri = 0
         alpha_rs = 0
         alpha_rd = 0 
-        sentences = texts.split('. ')
-        aug_text = '' 
-        for sentence in sentences:
-            aug_sentences = eda(sentence, alpha_sr=alpha_sr, alpha_ri=alpha_ri, alpha_rs=alpha_rs, p_rd=alpha_rd, num_aug=num_aug)
-            for aug_sentence in aug_sentences:
-                aug_text = aug_text + ' ' + aug_sentence + '.'
-        return aug_text
+        decoded = []
+        for text in texts:
+            aug_text = '' 
+            sentences = text.split('. ')
+            for sentence in sentences:
+                aug_sentence = eda(sentence, alpha_sr=alpha_sr, alpha_ri=alpha_ri, alpha_rs=alpha_rs, p_rd=alpha_rd)
+                aug_text = aug_text + aug_sentence + '. '
+            decoded.append(aug_text)
+        return decoded
 
     def generate_samples(self, raw_data, batch_size):
         # trim to shorter length
@@ -194,7 +196,7 @@ class DataBuilder:
             print('Generating samples for batch', batch, 'of', len(raw_data) // batch_size)
             original_text = raw_data[batch * batch_size:(batch + 1) * batch_size]
             sampled_text = self._sample_from_model(original_text, min_words=30 if self.args.dataset in ['pubmed'] else 55)
-            augmented_text = self._sample_from_embedding(sampled_text, num_aug=5)
+            augmented_text = self._sample_from_embedding(sampled_text)
 
             for o, s, a in zip(original_text, sampled_text, augmented_text):
                 if self.args.dataset == 'pubmed':

@@ -39,6 +39,7 @@ setting</b> (utilizing surrogate models) targets ChatGPT and GPT-4 generations. 
   ```bash setup.sh```
   
 (Notes: our experiments are run on 1 GPU of Tesla A100 with 80G memory.)
+If failed to read dataset just reinstall it (pip install -U datasets)
 
 ## Local Demo
 Please run following command locally for an interactive demo:

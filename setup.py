@@ -1,4 +1,6 @@
 from setuptools import *
+import nltk
+nltk.download('wordnet')
 
 def parse_requirements(filename):
     with open(filename, 'r') as file:

@@ -207,7 +207,7 @@ def add_word(new_words):
 # main data augmentation function
 ########################################################################
 
-def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9):
+def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=0):
 	
 	sentence = get_only_chars(sentence)
 	words = sentence.split(' ')
@@ -220,9 +220,8 @@ def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9)
 	#sr
 	if (alpha_sr > 0):
 		n_sr = max(1, int(alpha_sr*num_words))
-		for _ in range(num_new_per_technique):
-			a_words = synonym_replacement(words, n_sr)
-			augmented_sentences.append(' '.join(a_words))
+		a_words = synonym_replacement(words, n_sr)
+		augmented_sentences = ' '.join(a_words)
 
 	#ri
 	if (alpha_ri > 0):
@@ -244,15 +243,15 @@ def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9)
 			a_words = random_deletion(words, p_rd)
 			augmented_sentences.append(' '.join(a_words))
 
-	augmented_sentences = [get_only_chars(sentence) for sentence in augmented_sentences]
-	shuffle(augmented_sentences)
+	# augmented_sentences = [get_only_chars(sentence) for sentence in augmented_sentences]
+	# shuffle(augmented_sentences)
 
-	#trim so that we have the desired number of augmented sentences
-	if num_aug >= 1:
-		augmented_sentences = augmented_sentences[:num_aug]
-	else:
-		keep_prob = num_aug / len(augmented_sentences)
-		augmented_sentences = [s for s in augmented_sentences if random.uniform(0, 1) < keep_prob]
+	# #trim so that we have the desired number of augmented sentences
+	# if num_aug >= 1:
+	# 	augmented_sentences = augmented_sentences[:num_aug]
+	# else:
+	# 	keep_prob = num_aug / len(augmented_sentences)
+	# 	augmented_sentences = [s for s in augmented_sentences if random.uniform(0, 1) < keep_prob]
 
 	#append the original sentence
 	# augmented_sentences.append(sentence)

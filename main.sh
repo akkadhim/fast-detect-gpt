@@ -21,7 +21,7 @@ source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
 for D in $datasets; do
   for M in $source_models; do
     echo `date`, Preparing dataset ${D}_${M} ...
-    python scripts/data_builder.py --dataset $D --n_samples 500 --base_model_name $M --output_file $data_path/${D}_${M}
+    python3 scripts/data_builder.py --dataset $D --n_samples 500 --base_model_name $M --output_file $data_path/${D}_${M}
   done
 done
 
@@ -32,11 +32,11 @@ echo `date`, Evaluate models in the white-box setting:
 for D in $datasets; do
   for M in $source_models; do
     echo `date`, Evaluating Fast-DetectGPT on ${D}_${M} ...
-    python scripts/fast_detect_gpt.py --reference_model_name $M --scoring_model_name $M --dataset $D \
+    python3 scripts/fast_detect_gpt.py --reference_model_name $M --scoring_model_name $M --dataset $D \
                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/fast/${D}_${M}
 
     echo `date`, Evaluating baseline methods on ${D}_${M} ...
-    python scripts/baselines.py --scoring_model_name $M --dataset $D \
+    python3 scripts/baselines.py --scoring_model_name $M --dataset $D \
                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/baseline/${D}_${M}
   done
 done
@@ -45,7 +45,7 @@ done
 for D in $datasets; do
   for M in $source_models; do
     echo `date`, Evaluating DNA-GPT on ${D}_${M} ...
-    python scripts/dna_gpt.py --base_model_name $M --dataset $D \
+    python3 scripts/dna_gpt.py --base_model_name $M --dataset $D \
                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/dna/${D}_${M}
   done
 done
@@ -54,11 +54,11 @@ done
 for D in $datasets; do
   for M in $source_models; do
     echo `date`, Evaluating DetectGPT on ${D}_${M} ...
-    python scripts/detect_gpt.py --scoring_model_name $M --mask_filling_model_name t5-3b --n_perturbations 100 --dataset $D \
+    python3 scripts/detect_gpt.py --scoring_model_name $M --mask_filling_model_name t5-3b --n_perturbations 100 --dataset $D \
                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/detect/${D}_${M}
      # we leverage DetectGPT to generate the perturbations
     echo `date`, Evaluating DetectLLM methods on ${D}_${M} ...
-    python scripts/detect_llm.py --scoring_model_name $M --dataset $D \
+    python3 scripts/detect_llm.py --scoring_model_name $M --dataset $D \
                           --dataset_file $data_path/${D}_${M}.t5-3b.perturbation_100 --output_file $res_path/white/detectllm/${D}_${M}
   done
 done
@@ -74,7 +74,7 @@ for D in $datasets; do
     M1=gpt-j-6B  # sampling model
     for M2 in $scoring_models; do
       echo `date`, Evaluating Fast-DetectGPT on ${D}_${M}.${M1}_${M2} ...
-      python scripts/fast_detect_gpt.py --reference_model_name ${M1} --scoring_model_name ${M2} --dataset $D \
+      python3 scripts/fast_detect_gpt.py --reference_model_name ${M1} --scoring_model_name ${M2} --dataset $D \
                           --dataset_file $data_path/${D}_${M} --output_file $res_path/black/fast/${D}_${M}.${M1}_${M2}
     done
   done
@@ -86,11 +86,11 @@ for D in $datasets; do
     M1=t5-3b  # perturbation model
     for M2 in $scoring_models; do
       echo `date`, Evaluating DetectGPT on ${D}_${M}.${M1}_${M2} ...
-      python scripts/detect_gpt.py --mask_filling_model_name ${M1} --scoring_model_name ${M2} --n_perturbations 100 --dataset $D \
+      python3 scripts/detect_gpt.py --mask_filling_model_name ${M1} --scoring_model_name ${M2} --n_perturbations 100 --dataset $D \
                           --dataset_file $data_path/${D}_${M} --output_file $res_path/black/detect/${D}_${M}.${M1}_${M2}
       # we leverage DetectGPT to generate the perturbations
       echo `date`, Evaluating DetectLLM methods on ${D}_${M}.${M1}_${M2} ...
-      python scripts/detect_llm.py --scoring_model_name ${M2} --dataset $D \
+      python3 scripts/detect_llm.py --scoring_model_name ${M2} --dataset $D \
                           --dataset_file $data_path/${D}_${M}.${M1}.perturbation_100 --output_file $res_path/black/detectllm/${D}_${M}.${M1}_${M2}
     done
   done
