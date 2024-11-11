@@ -190,6 +190,7 @@ class DataBuilder:
         data = {
             "original": [],
             "sampled": [],
+            "augmented": [],
         }
 
         for batch in range(len(raw_data) // batch_size):
