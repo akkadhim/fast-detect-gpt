@@ -119,7 +119,7 @@ def experiment(args):
         predictions = {
             'real': [x["original_crit"] for x in eval_results],
             'samples': [x["sampled_crit"] for x in eval_results],
-            'augmented': [x["augmented_crit"] for x in results]  # Add augmented predictions
+            'augmented': [x["augmented_crit"] for x in eval_results]  # Add augmented predictions
         }
 
         fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])

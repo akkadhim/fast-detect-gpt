@@ -168,6 +168,58 @@ class DataBuilder:
         return decoded
 
     def generate_samples(self, raw_data, batch_size):
+        try:
+            existing_data = load_data(args.output_file)
+            original_data = existing_data.get("original", [])
+            sampled_data = existing_data.get("sampled", [])
+            augmented_data = existing_data.get("augmented", [])
+        except FileNotFoundError:
+            print("No existing data file found. Starting from scratch.")
+            original_data, sampled_data, augmented_data = [], [], []
+
+        data = {
+            "original": original_data,
+            "sampled": sampled_data,
+            "augmented": augmented_data,
+        }
+
+        # Calculate start point based on how much data is already available
+        start_index = len(data["augmented"])
+
+        # Loop through batches starting from where we left off
+        for batch in range(start_index // batch_size, len(raw_data) // batch_size):
+            print('Generating samples for batch', batch, 'of', len(raw_data) // batch_size)
+            
+            # Retrieve already existing original and sampled data
+            if batch < len(original_data) // batch_size:
+                original_text = original_data[batch * batch_size:(batch + 1) * batch_size]
+                sampled_text = sampled_data[batch * batch_size:(batch + 1) * batch_size]
+            else:
+                # Generate only if not already present
+                original_text = raw_data[batch * batch_size:(batch + 1) * batch_size]
+                sampled_text = self._sample_from_model(
+                    original_text, 
+                    min_words=30 if self.args.dataset in ['pubmed'] else 55
+                )
+                data["original"].extend(original_text)
+                data["sampled"].extend(sampled_text)
+
+            # Generate augmented data for the current batch
+            augmented_text = self._sample_from_embedding(sampled_text)
+
+            for o, s, a in zip(original_text, sampled_text, augmented_text):
+                if self.args.dataset == 'pubmed':
+                    s = _truncate_to_substring(s, 'Question:', 2)
+                    a = _truncate_to_substring(a, 'Question:', 2)
+                    o = o.replace(custom_datasets.SEPARATOR, ' ')
+
+                # Trim the original and sampled texts to match lengths
+                o, s, a = _trim_to_shorter_length(o, s, a)
+
+                # Add the new augmented text
+                data["augmented"].append(a)
+    
+    def generate_samples(self, raw_data, batch_size):
         # trim to shorter length
         def _trim_to_shorter_length(texta, textb, textc):
             # truncate to shorter of o and s

@@ -14,16 +14,17 @@ data_path=$exp_path/data
 res_path=$exp_path/results
 mkdir -p $exp_path $data_path $res_path
 
-datasets="xsum squad writing"
+datasets="xsum squad"
+# datasets="writing"
 source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
 
-# preparing dataset
-for D in $datasets; do
-  for M in $source_models; do
-    echo `date`, Preparing dataset ${D}_${M} ...
-    python3 scripts/data_builder.py --dataset $D --n_samples 500 --base_model_name $M --output_file $data_path/${D}_${M}
-  done
-done
+# # preparing dataset
+# for D in $datasets; do
+#   for M in $source_models; do
+#     echo `date`, Preparing dataset ${D}_${M} ...
+#     python3 scripts/data_builder.py --dataset $D --n_samples 500 --base_model_name $M --output_file $data_path/${D}_${M}
+#   done
+# done
 
 # White-box Setting
 echo `date`, Evaluate models in the white-box setting:
