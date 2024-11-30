@@ -1,7 +1,7 @@
 import os
 
 class dicrectories:
-    knowledge = "IMDbKnowledge"
+    knowledge = "knowledge_files/IMDbKnowledge"
     
     @staticmethod
     def pickle_by_id(path, id):
