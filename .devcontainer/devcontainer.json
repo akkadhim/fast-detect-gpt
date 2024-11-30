@@ -1,10 +1,10 @@
 {
     "name": "TM Autoencoder Devcontainer",
     "dockerComposeFile": "docker-compose.yml",
-    "service": "tm-autoencoder-development",
+    "service": "fast-detect-tm",
     "workspaceFolder": "/app",
     "mounts": [
-      "source=/raid/home/ahmedkk/repo/DAT945/IMDbKnowledge,target=/app/IMDbKnowledge,type=bind"
+      "source=/raid/home/ahmedkk/knowledge_files,target=/app/knowledge_files,type=bind"
     ],
     "forwardPorts": [],
     "postCreateCommand": "echo 'Devcontainer is ready'",

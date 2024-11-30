@@ -8,6 +8,6 @@ WORKDIR /app
 
 
 # You should have a requirements.txt to define your dependencies
-RUN pip3 install .
+# RUN pip3 install .
 
 CMD [ "tail", "-f", "/dev/null" ]

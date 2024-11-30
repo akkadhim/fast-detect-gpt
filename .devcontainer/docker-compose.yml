@@ -1,5 +1,5 @@
 services:
-  tm-autoencoder-development:
+  fast-detect-tm:
     build:
       context: ../
       dockerfile: .devcontainer/Dockerfile
@@ -9,4 +9,4 @@ services:
           devices:
             - driver: nvidia
               capabilities: [gpu]
-              count: 1 # Assign number of GPUs or use 'all' to assign all available GPUs
+              count: all # Assign number of GPUs or use 'all' to assign all available GPUs
