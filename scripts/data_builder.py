@@ -15,6 +15,7 @@ import custom_datasets
 from model import load_tokenizer, load_model
 from eda import *
 from tqdm import tqdm
+from embedding_augmentor import EmbeddingAugmentor
 
 def save_data(output_file, args, data):
     # write args to file
@@ -172,11 +173,12 @@ class DataBuilder:
         alpha_rs = 0
         alpha_rd = 0 
         decoded = []
+        augmentor = EmbeddingAugmentor(args.augmentor)
         for text in tqdm(texts, desc="Augmenting texts"):
             aug_text = '' 
             sentences = text.split('. ')
             for sentence in sentences:
-                aug_sentence = eda(sentence, alpha_sr=alpha_sr, alpha_ri=alpha_ri, alpha_rs=alpha_rs, p_rd=alpha_rd)
+                aug_sentence = eda(augmentor, sentence, alpha_sr=alpha_sr, alpha_ri=alpha_ri, alpha_rs=alpha_rs, p_rd=alpha_rd)
                 aug_text = aug_text + aug_sentence + '. '
             decoded.append(aug_text)
         return decoded
@@ -330,6 +332,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
     parser.add_argument('--bypass_genearation', type=str, default="True")
+    parser.add_argument('--augmentor', type=str, default="tm-ae")
     args = parser.parse_args()
 
     os.environ["XDG_CACHE_HOME"] = args.cache_dir

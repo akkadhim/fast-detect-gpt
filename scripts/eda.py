@@ -97,7 +97,7 @@ def knowledge_replacement(word):
 #nltk.download('wordnet')
 from nltk.corpus import wordnet 
 
-def synonym_replacement(words, n):
+def synonym_replacement(augmentor, words, n):
 	new_words = words.copy()
 	random_word_list = list(set([word for word in words if word not in stop_words]))
 	random.shuffle(random_word_list)
@@ -107,7 +107,8 @@ def synonym_replacement(words, n):
 		if len(synonyms) >= 1:
 			synonym = random.choice(list(synonyms))
             # replace from knowledge
-			synonym = knowledge_replacement(synonym)
+			synonym = augmentor.knowledge_replacement_embeddings(synonym)
+			# synonym = knowledge_replacement(synonym)
 			new_words = [synonym if word == random_word else word for word in new_words]
 			#print("replaced", random_word, "with", synonym)
 			num_replaced += 1
@@ -207,8 +208,7 @@ def add_word(new_words):
 # main data augmentation function
 ########################################################################
 
-def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=0):
-	
+def eda(augmentor, sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=0):
 	sentence = get_only_chars(sentence)
 	words = sentence.split(' ')
 	words = [word for word in words if word is not '']
@@ -220,7 +220,7 @@ def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=0)
 	#sr
 	if (alpha_sr > 0):
 		n_sr = max(1, int(alpha_sr*num_words))
-		a_words = synonym_replacement(words, n_sr)
+		a_words = synonym_replacement(augmentor, words, n_sr)
 		augmented_sentences = ' '.join(a_words)
 
 	#ri
