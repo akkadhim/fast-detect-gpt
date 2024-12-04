@@ -29,7 +29,7 @@ def save_data(output_file, args, data):
         json.dump(data, fout, indent=4)
         print(f"Raw data written into {data_file}")
 
-def append_augmented_to_file(output_file, augmented_data):
+def append_augmented_to_file(output_file, augmented_data, augmentor):
     data_file = f"{output_file}.raw_data.json"
     # load existing data from the file
     if os.path.exists(data_file):
@@ -38,9 +38,10 @@ def append_augmented_to_file(output_file, augmented_data):
     else:
         raise FileNotFoundError(f"Data file {data_file} does not exist.")
     # append augmented data
-    if "augmented" in existing_data:
+    augmented_data_name = "augmented" + augmentor
+    if augmented_data_name in existing_data:
         print("Augmented data already exists. It will be overwritten.")
-    existing_data["augmented"] = augmented_data
+    existing_data[augmented_data_name] = augmented_data
     # save updated data back to the file
     with open(data_file, "w") as fout:
         json.dump(existing_data, fout, indent=4)
@@ -352,4 +353,4 @@ if __name__ == '__main__':
     else:
         data_builder = DataBuilder(args)
         augmented_data = data_builder.generate_augmented_samples(batch_size=args.batch_size)
-        append_augmented_to_file(args.output_file, augmented_data)
+        append_augmented_to_file(args.output_file, augmented_data, args.augmentor)
