@@ -17,6 +17,9 @@ from eda import *
 from tqdm import tqdm
 from embedding_augmentor import EmbeddingAugmentor
 
+def preprocess_text(text):
+    return text
+
 def save_data(output_file, args, data):
     # write args to file
     args_file = f"{output_file}.args.json"
@@ -38,7 +41,7 @@ def append_augmented_to_file(output_file, augmented_data, augmentor):
     else:
         raise FileNotFoundError(f"Data file {data_file} does not exist.")
     # append augmented data
-    augmented_data_name = "augmented" + augmentor
+    augmented_data_name = "augmented_" + augmentor
     if augmented_data_name in existing_data:
         print("Augmented data already exists. It will be overwritten.")
     existing_data[augmented_data_name] = augmented_data
@@ -57,8 +60,9 @@ def load_data(input_file):
 class DataBuilder:
     def __init__(self, args):
         self.args = args
-        self.base_tokenizer = load_tokenizer(args.base_model_name, args.dataset, args.cache_dir)
-        self.base_model = None if args.openai_model else load_model(args.base_model_name, args.device, args.cache_dir)
+        if(args.bypass_genearation == "False"):
+            self.base_tokenizer = load_tokenizer(args.base_model_name, args.dataset, args.cache_dir)
+            self.base_model = None if args.openai_model else load_model(args.base_model_name, args.device, args.cache_dir)
 
     def _openai_sample(self, prefix):
         def _drop_last_word(text):
@@ -168,20 +172,30 @@ class DataBuilder:
 
         return decoded
     
-    def _sample_from_embedding(self, texts): 
-        alpha_sr = 0.1 # percentage of augmentation
-        alpha_ri = 0
-        alpha_rs = 0
-        alpha_rd = 0 
+    def _sample_from_augmentor(self, texts):
         decoded = []
+        percentage = 5
         augmentor = EmbeddingAugmentor(args.augmentor)
-        for text in tqdm(texts, desc="Augmenting texts"):
-            aug_text = '' 
-            sentences = text.split('. ')
-            for sentence in sentences:
-                aug_sentence = eda(augmentor, sentence, alpha_sr=alpha_sr, alpha_ri=alpha_ri, alpha_rs=alpha_rs, p_rd=alpha_rd)
-                aug_text = aug_text + aug_sentence + '. '
-            decoded.append(aug_text)
+        if(args.augmentor in augmentor.MODELS):
+            for text in tqdm(texts, desc=f"Augmenting texts using {args.augmentor}"):
+                aug_text = '' 
+                sentences = text.split('. ')
+                for sentence in sentences:
+                    aug_sentence = augmentor.do(sentence,percentage)
+                    aug_text = aug_text + aug_sentence + '. '
+                decoded.append(aug_text)
+        else:
+            alpha_sr = 0
+            alpha_ri = 0
+            alpha_rs = 0
+            alpha_rd = 0 
+            for text in tqdm(texts, desc="Augmenting texts using EDA"):
+                aug_text = '' 
+                sentences = text.split('. ')
+                for sentence in sentences:
+                    aug_sentence = eda(augmentor, sentence, alpha_sr=alpha_sr, alpha_ri=alpha_ri, alpha_rs=alpha_rs, p_rd=alpha_rd)
+                    aug_text = aug_text + aug_sentence + '. '
+                decoded.append(aug_text)
         return decoded
 
     def generate_augmented_samples(self, batch_size):
@@ -209,7 +223,7 @@ class DataBuilder:
             original_batch = original_data[batch * batch_size:(batch + 1) * batch_size]
             sampled_batch = sampled_data[batch * batch_size:(batch + 1) * batch_size]
             # Generate augmented samples using embeddings
-            augmented_batch = self._sample_from_embedding(sampled_batch)
+            augmented_batch = self._sample_from_augmentor(sampled_batch)
             # Process each set of texts
             for o, s, a in zip(original_batch, sampled_batch, augmented_batch):               
                 # Trim to the shortest length
@@ -249,7 +263,7 @@ class DataBuilder:
             print('Generating samples for batch', batch, 'of', len(raw_data) // batch_size)
             original_text = raw_data[batch * batch_size:(batch + 1) * batch_size]
             sampled_text = self._sample_from_model(original_text, min_words=30 if self.args.dataset in ['pubmed'] else 55)
-            augmented_text = self._sample_from_embedding(sampled_text)
+            augmented_text = self._sample_from_augmentor(sampled_text)
 
             for o, s, a in zip(original_text, sampled_text, augmented_text):
                 if self.args.dataset == 'pubmed':
@@ -333,7 +347,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
     parser.add_argument('--bypass_genearation', type=str, default="True")
-    parser.add_argument('--augmentor', type=str, default="tm-ae")
+    parser.add_argument('--augmentor', type=str, default="tmae")
     args = parser.parse_args()
 
     os.environ["XDG_CACHE_HOME"] = args.cache_dir
@@ -351,6 +365,7 @@ if __name__ == '__main__':
         data = generate_data(args, args.dataset, dataset_keys[args.dataset] if args.dataset in dataset_keys else None)
         save_data(args.output_file, args, data)
     else:
+        print(f'Augmenting using {args.augmentor}...')
         data_builder = DataBuilder(args)
         augmented_data = data_builder.generate_augmented_samples(batch_size=args.batch_size)
         append_augmented_to_file(args.output_file, augmented_data, args.augmentor)

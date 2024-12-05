@@ -14,10 +14,10 @@ class tools:
                 try:
                     return pickle.load(saved)
                 except (pickle.UnpicklingError, EOFError):
-                    print("Error: The file could not be unpickled: ",path)
+                    # print("Error: The file could not be unpickled: ",path)
                     return []
         else:
-            print("Error: The file does not exist: ",path)
+            # print("Error: The file does not exist: ",path)
             return []
 
     @staticmethod

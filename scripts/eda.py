@@ -1,91 +1,9 @@
 # Easy data augmentation techniques for text classification
 # Jason Wei and Kai Zou
-
+import text_organizer
 import random
 from random import shuffle
-from directories import dicrectories
-from tools import tools
 random.seed(1)
-
-#stop words list
-stop_words = ['i', 'me', 'my', 'myself', 'we', 'our', 
-			'ours', 'ourselves', 'you', 'your', 'yours', 
-			'yourself', 'yourselves', 'he', 'him', 'his', 
-			'himself', 'she', 'her', 'hers', 'herself', 
-			'it', 'its', 'itself', 'they', 'them', 'their', 
-			'theirs', 'themselves', 'what', 'which', 'who', 
-			'whom', 'this', 'that', 'these', 'those', 'am', 
-			'is', 'are', 'was', 'were', 'be', 'been', 'being', 
-			'have', 'has', 'had', 'having', 'do', 'does', 'did',
-			'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or',
-			'because', 'as', 'until', 'while', 'of', 'at', 
-			'by', 'for', 'with', 'about', 'against', 'between',
-			'into', 'through', 'during', 'before', 'after', 
-			'above', 'below', 'to', 'from', 'up', 'down', 'in',
-			'out', 'on', 'off', 'over', 'under', 'again', 
-			'further', 'then', 'once', 'here', 'there', 'when', 
-			'where', 'why', 'how', 'all', 'any', 'both', 'each', 
-			'few', 'more', 'most', 'other', 'some', 'such', 'no', 
-			'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 
-			'very', 's', 't', 'can', 'will', 'just', 'don', 
-			'should', 'now', '']
-
-#cleaning up text
-import re
-def get_only_chars(line):
-
-    clean_line = ""
-
-    line = line.replace("’", "")
-    line = line.replace("'", "")
-    line = line.replace("-", " ") #replace hyphens with spaces
-    line = line.replace("\t", " ")
-    line = line.replace("\n", " ")
-    line = line.lower()
-
-    for char in line:
-        if char in 'qwertyuiopasdfghjklzxcvbnm ':
-            clean_line += char
-        else:
-            clean_line += ' '
-
-    clean_line = re.sub(' +',' ',clean_line) #delete extra spaces
-    if clean_line and clean_line[0] == ' ':
-        clean_line = clean_line[1:]
-    return clean_line
-
-def preprocess_text(text):
-    return text
-knowledge_directory = dicrectories.knowledge
-
-def knowledge_replacement(word):
-    # print("original word:",word)
-    vectorizer_X = tools.read_pickle_data("vectorizer_X.pickle")
-    id = vectorizer_X.vocabulary_.get(word, None)
-    if id is None:
-        return word
-
-    id = vectorizer_X.vocabulary_[word]
-    file_path = dicrectories.pickle_by_id(knowledge_directory, id)
-    clauses = tools.read_pickle_data(file_path)
-    clauses_sorted = sorted(clauses, key=lambda x: x[0], reverse=False)
-    
-    # Collect top features from high-weight clauses
-    top_weight = 5
-    top_features = set()
-    
-    for clause in clauses_sorted:
-        weight = clause[0]
-        if weight > top_weight:
-            for feature_id in clause[1]:
-                top_features.add(vectorizer_X.get_feature_names_out()[feature_id])
-    
-    if len(top_features) > 0:
-        top_features_list = list(top_features) # Convert set to list
-        # print("knowledge word:",top_features_list[0])        
-        return top_features_list[0]
-    else:
-        return word
 
 ########################################################################
 # Synonym replacement
@@ -99,16 +17,13 @@ from nltk.corpus import wordnet
 
 def synonym_replacement(augmentor, words, n):
 	new_words = words.copy()
-	random_word_list = list(set([word for word in words if word not in stop_words]))
+	random_word_list = list(set([word for word in words if word not in text_organizer.stop_words]))
 	random.shuffle(random_word_list)
 	num_replaced = 0
 	for random_word in random_word_list:
 		synonyms = get_synonyms(random_word)
 		if len(synonyms) >= 1:
 			synonym = random.choice(list(synonyms))
-            # replace from knowledge
-			synonym = augmentor.knowledge_replacement_embeddings(synonym)
-			# synonym = knowledge_replacement(synonym)
 			new_words = [synonym if word == random_word else word for word in new_words]
 			#print("replaced", random_word, "with", synonym)
 			num_replaced += 1
@@ -209,7 +124,7 @@ def add_word(new_words):
 ########################################################################
 
 def eda(augmentor, sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=0):
-	sentence = get_only_chars(sentence)
+	sentence =  text_organizer.get_only_chars(sentence)
 	words = sentence.split(' ')
 	words = [word for word in words if word is not '']
 	num_words = len(words)
