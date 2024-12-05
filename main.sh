@@ -14,8 +14,8 @@ data_path=$exp_path/data
 res_path=$exp_path/results
 mkdir -p $exp_path $data_path $res_path
 
-# datasets="writing xsum squad"
-# source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
+datasets="writing xsum squad"
+source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
 
 # # preparing dataset
 # for D in $datasets; do
@@ -25,9 +25,7 @@ mkdir -p $exp_path $data_path $res_path
 #   done
 # done
 
-datasets="writing"
-source_models="gpt-neox-20b"
-# preparing dataset
+# augmenting dataset
 for D in $datasets; do
   for M in $source_models; do
     echo `date`, Preparing dataset ${D}_${M} ...

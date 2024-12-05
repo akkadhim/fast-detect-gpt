@@ -177,7 +177,7 @@ class DataBuilder:
         percentage = 5
         augmentor = EmbeddingAugmentor(args.augmentor)
         if(args.augmentor in augmentor.MODELS):
-            for text in tqdm(texts, desc=f"Augmenting texts using {args.augmentor}"):
+            for text in texts:
                 aug_text = '' 
                 sentences = text.split('. ')
                 for sentence in sentences:
@@ -218,7 +218,7 @@ class DataBuilder:
         # Prepare for augmentation
         augmented_data = []
         for batch in tqdm(range(len(original_data) // batch_size), desc="Processing batches"):
-            print('Generating augmented samples for batch', batch, 'of', len(original_data) // batch_size)
+            # print('Generating augmented samples for batch', batch, 'of', len(original_data) // batch_size)
             # Extract batches
             original_batch = original_data[batch * batch_size:(batch + 1) * batch_size]
             sampled_batch = sampled_data[batch * batch_size:(batch + 1) * batch_size]
