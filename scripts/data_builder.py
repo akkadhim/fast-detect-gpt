@@ -64,6 +64,18 @@ class DataBuilder:
             self.base_tokenizer = load_tokenizer(args.base_model_name, args.dataset, args.cache_dir)
             self.base_model = None if args.openai_model else load_model(args.base_model_name, args.device, args.cache_dir)
 
+            # trim to shorter length
+    
+    def _trim_to_shorter_length(self, texta, textb, textc = None):
+        # truncate to shorter of o and s
+        shorter_length = min(len(texta.split(' ')), len(textb.split(' ')), len(textc.split(' ')))
+        texta = ' '.join(texta.split(' ')[:shorter_length])
+        textb = ' '.join(textb.split(' ')[:shorter_length])
+        if textc:
+            textc = ' '.join(textc.split(' ')[:shorter_length])
+            return texta, textb, textc
+        return texta, textb
+    
     def _openai_sample(self, prefix):
         def _drop_last_word(text):
             return ' '.join(text.split(' ')[:-1])
@@ -174,14 +186,13 @@ class DataBuilder:
     
     def _sample_from_augmentor(self, texts):
         decoded = []
-        percentage = 5
         augmentor = EmbeddingAugmentor(args.augmentor)
         if(args.augmentor in augmentor.MODELS):
             for text in texts:
                 aug_text = '' 
                 sentences = text.split('. ')
                 for sentence in sentences:
-                    aug_sentence = augmentor.do(sentence,percentage)
+                    aug_sentence = augmentor.do(sentence,args.augment_percnt)
                     aug_text = aug_text + aug_sentence + '. '
                 decoded.append(aug_text)
         else:
@@ -199,50 +210,28 @@ class DataBuilder:
         return decoded
 
     def generate_augmented_samples(self, batch_size):
-        def _trim_to_shorter_length(texta, textb, textc):
-            # truncate to shorter of o and s
-            shorter_length = min(len(texta.split(' ')), len(textb.split(' ')), len(textc.split(' ')))
-            texta = ' '.join(texta.split(' ')[:shorter_length])
-            textb = ' '.join(textb.split(' ')[:shorter_length])
-            textc = ' '.join(textc.split(' ')[:shorter_length])
-            return texta, textb, textc
         existing_data = load_data(args.output_file)
         original_data = existing_data.get("original", [])
         sampled_data = existing_data.get("sampled", [])
-        # Check if data is available
+
         if not original_data or not sampled_data:
             raise ValueError("Original and sampled data must be present in the loaded file to generate augmented samples.")
-        # Ensure that the lengths match
         if len(original_data) != len(sampled_data):
             raise ValueError("Mismatch between original and sampled data lengths.")
-        # Prepare for augmentation
+
         augmented_data = []
         for batch in tqdm(range(len(original_data) // batch_size), desc="Processing batches"):
             # print('Generating augmented samples for batch', batch, 'of', len(original_data) // batch_size)
-            # Extract batches
             original_batch = original_data[batch * batch_size:(batch + 1) * batch_size]
             sampled_batch = sampled_data[batch * batch_size:(batch + 1) * batch_size]
-            # Generate augmented samples using embeddings
             augmented_batch = self._sample_from_augmentor(sampled_batch)
-            # Process each set of texts
             for o, s, a in zip(original_batch, sampled_batch, augmented_batch):               
-                # Trim to the shortest length
-                o, s, a = _trim_to_shorter_length(o, s, a)
-                # Add augmented text to the data
+                o, s, a = self._trim_to_shorter_length(o, s, a)
                 augmented_data.append(a)
-        # Update the existing data dictionary
+                
         return augmented_data
 
     def generate_samples(self, raw_data, batch_size):
-        # trim to shorter length
-        def _trim_to_shorter_length(texta, textb, textc):
-            # truncate to shorter of o and s
-            shorter_length = min(len(texta.split(' ')), len(textb.split(' ')), len(textc.split(' ')))
-            texta = ' '.join(texta.split(' ')[:shorter_length])
-            textb = ' '.join(textb.split(' ')[:shorter_length])
-            textc = ' '.join(textc.split(' ')[:shorter_length])
-            return texta, textb, textc
-
         def _truncate_to_substring(text, substring, idx_occurrence):
             # truncate everything after the idx_occurrence occurrence of substring
             assert idx_occurrence > 0, 'idx_occurrence must be > 0'
@@ -252,33 +241,28 @@ class DataBuilder:
                 if idx == -1:
                     return text
             return text[:idx]
-
+        
         data = {
             "original": [],
-            "sampled": [],
-            "augmented": [],
+            "sampled": []
         }
-
         for batch in range(len(raw_data) // batch_size):
             print('Generating samples for batch', batch, 'of', len(raw_data) // batch_size)
             original_text = raw_data[batch * batch_size:(batch + 1) * batch_size]
             sampled_text = self._sample_from_model(original_text, min_words=30 if self.args.dataset in ['pubmed'] else 55)
-            augmented_text = self._sample_from_augmentor(sampled_text)
 
-            for o, s, a in zip(original_text, sampled_text, augmented_text):
+            for o, s in zip(original_text, sampled_text):
                 if self.args.dataset == 'pubmed':
                     s = _truncate_to_substring(s, 'Question:', 2)
-                    a = _truncate_to_substring(a, 'Question:', 2)
                     o = o.replace(custom_datasets.SEPARATOR, ' ')
                 
                 # Trim the original and sampled texts to match lengths
-                o, s, a = _trim_to_shorter_length(o, s, a)
+                o, s = _trim_to_shorter_length(o, s)
                 
                 # Add to the data
                 data["original"].append(o)
                 data["sampled"].append(s)
-                data["augmented"].append(a)
-
+        
         return data
 
 def generate_data(args, dataset, key):
@@ -348,6 +332,7 @@ if __name__ == '__main__':
     parser.add_argument('--cache_dir', type=str, default="../cache")
     parser.add_argument('--bypass_genearation', type=str, default="True")
     parser.add_argument('--augmentor', type=str, default="tmae")
+    parser.add_argument('--augment_percnt', type=int, default=5)
     args = parser.parse_args()
 
     os.environ["XDG_CACHE_HOME"] = args.cache_dir

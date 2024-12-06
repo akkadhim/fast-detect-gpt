@@ -16,6 +16,7 @@ mkdir -p $exp_path $data_path $res_path
 
 datasets="writing xsum squad"
 source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
+embedding_source ="glove fasttext word2vec"
 
 # # preparing dataset
 # for D in $datasets; do
@@ -26,28 +27,30 @@ source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
 # done
 
 # augmenting dataset
-# for D in $datasets; do
-#   for M in $source_models; do
-#     echo `date`, Preparing dataset ${D}_${M} ...
-#     python3 scripts/data_builder.py --dataset $D --n_samples 500 --base_model_name $M --output_file $data_path/${D}_${M} --bypass_genearation True
-#   done
-# done
-
-# White-box Setting
-echo `date`, Evaluate models in the white-box setting:
-
-# evaluate Fast-DetectGPT and fast baselines
 for D in $datasets; do
   for M in $source_models; do
-    echo `date`, Evaluating Fast-DetectGPT on ${D}_${M} ...
-    python3 scripts/fast_detect_gpt.py --reference_model_name $M --scoring_model_name $M --dataset $D \
-                          --dataset_file $data_path/${D}_${M} --output_file $res_path/white/fast/${D}_${M}
-
-    echo `date`, Evaluating baseline methods on ${D}_${M} ...
-    python3 scripts/baselines.py --scoring_model_name $M --dataset $D \
-                          --dataset_file $data_path/${D}_${M} --output_file $res_path/white/baseline/${D}_${M}
+    for E in $embedding_source; do
+      echo `date`, Preparing dataset ${D}_${M}_${E} ...
+      python3 scripts/data_builder.py --dataset $D --n_samples 500 --base_model_name $M --output_file $data_path/${D}_${M} --bypass_genearation True --augmentor $E
+    done
   done
 done
+
+# White-box Setting
+# echo `date`, Evaluate models in the white-box setting:
+
+# # evaluate Fast-DetectGPT and fast baselines
+# for D in $datasets; do
+#   for M in $source_models; do
+#     echo `date`, Evaluating Fast-DetectGPT on ${D}_${M} ...
+#     python3 scripts/fast_detect_gpt.py --reference_model_name $M --scoring_model_name $M --dataset $D \
+#                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/fast/${D}_${M}
+
+#     echo `date`, Evaluating baseline methods on ${D}_${M} ...
+#     python3 scripts/baselines.py --scoring_model_name $M --dataset $D \
+#                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/baseline/${D}_${M}
+#   done
+# done
 
 # # evaluate DNA-GPT
 # for D in $datasets; do
