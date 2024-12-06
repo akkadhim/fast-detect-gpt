@@ -188,13 +188,8 @@ class DataBuilder:
         decoded = []
         augmentor = EmbeddingAugmentor(args.augmentor)
         if(args.augmentor in augmentor.MODELS):
-            for text in texts:
-                aug_text = '' 
-                sentences = text.split('. ')
-                for sentence in sentences:
-                    aug_sentence = augmentor.do(sentence,args.augment_percnt)
-                    aug_text = aug_text + aug_sentence + '. '
-                decoded.append(aug_text)
+            for doc in texts:
+                decoded.append(augmentor.do(doc,args.augment_percnt))
         else:
             alpha_sr = 0
             alpha_ri = 0
