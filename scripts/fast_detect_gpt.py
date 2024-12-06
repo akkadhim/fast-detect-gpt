@@ -101,7 +101,7 @@ def experiment(args):
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = data["original"][idx]
         sampled_text = data["sampled"][idx]
-        augmented_text = data["augmented"][idx]  # Augmented data added here
+        augmented_text = data["augmented_" + args.augmentor][idx]  # Augmented data added here
         
         # ----- Original text -----
         tokenized = scoring_tokenizer(original_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
@@ -206,6 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
+    parser.add_argument('--augmentor', type=str, default="tmae")
     args = parser.parse_args()
 
     experiment(args)
