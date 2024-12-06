@@ -1,7 +1,6 @@
 import numpy as np
 import fasttext
 from gensim.models import Word2Vec
-import pickle
 from directories import dicrectories
 from tools import tools
 import text_organizer
@@ -9,6 +8,8 @@ import random
 
 class EmbeddingAugmentor:
     MODELS = ['glove', 'fasttext', 'word2vec', 'tmae']
+    SIMILAR_SIZE = 400
+    SIMILAR_INDEX = 5
     
     def __init__(self, model_name):
         self.model_name = model_name
@@ -25,9 +26,15 @@ class EmbeddingAugmentor:
         elif model_name == "word2vec":
             self.load_word2vec_model('IMDB/custom_word2vec.model')
         elif model_name == "tmae":
-            self.vectorizer_X = tools.read_pickle_data("vectorizer_X.pickle")
-            self.knowledge_directory = dicrectories.knowledge
-        
+            self.load_tmae_model('vectorizer_X.pickle')
+      
+      
+    def cosine_similarity(vec1, vec2):
+        dot_product = np.dot(vec1, vec2)
+        norm_vec1 = np.linalg.norm(vec1)
+        norm_vec2 = np.linalg.norm(vec2)
+        return dot_product / (norm_vec1 * norm_vec2)
+    
     def load_glove_embeddings(self, glove_file_path):
         embeddings_index = {}
         with open(glove_file_path, 'r', encoding='utf-8') as f:
@@ -37,16 +44,51 @@ class EmbeddingAugmentor:
                 coefs = np.asarray(values[1:], dtype='float32')
                 embeddings_index[word] = coefs
         self.models["glove"] = embeddings_index
+    
+    def glove_knowledge_replacement(self, word):
+        glove_vectors = self.models["glove"]
+        if word not in glove_vectors:
+            return []
+        word_vector = glove_vectors[word]
+        similarities = {}
+        for other_word, other_vector in glove_vectors.items():
+            if other_word != word:
+                similarities[other_word] = self.cosine_similarity(word_vector, other_vector)
+        # Sort by similarity score
+        sorted_similarities = sorted(similarities.items(), key=lambda item: item[1], reverse=False)
+        return sorted_similarities[0]
+
 
     def load_fasttext_model(self, fasttext_path):
         self.models["fasttext"] = fasttext.load_model(fasttext_path)
+    
+    def fasttext_knowledge_replacement(self, word):
+        fasttext_vectors = self.models["fasttext"]
+        if word in fasttext_vectors.words:
+            similar_words = fasttext_vectors.get_nearest_neighbors(word, k=self.SIMILAR_SIZE)  
+            similar_words = [w for _, w in similar_words]  
+            return similar_words[self.SIMILAR_INDEX]  
+        else: 
+            return None
+        
 
     def load_word2vec_model(self, word2vec_path):
         self.models["word2vec"] = Word2Vec.load(word2vec_path)
+    
+    def word2vec_knowledge_replacement(self, word):
+        word2vec_vectors = self.models["word2vec"]
+        if word in word2vec_vectors.wv:
+            similar_words = word2vec_vectors.wv.most_similar(word, topn=self.SIMILAR_SIZE)
+            return similar_words[self.SIMILAR_INDEX]  
+        else: 
+            return None
+        
+    
+    def load_tmae_model(self, path):
+        self.vectorizer_X = tools.read_pickle_data(path)
+        self.knowledge_directory = dicrectories.knowledge
         
     def tmae_knowledge_replacement(self, word):
-        # print("original word:",word)
-
         id = self.vectorizer_X.vocabulary_.get(word, None)
         if id is None:
             return None
@@ -56,12 +98,11 @@ class EmbeddingAugmentor:
         if not clauses:
             return None
     
-        min_weight = 5
-        clauses_sorted = sorted((clause for clause in clauses if clause[0] > min_weight), key=lambda x: x[0], reverse=False)
+        clauses_sorted = sorted((clause for clause in clauses if clause[0] > self.SIMILAR_INDEX), key=lambda x: x[0], reverse=False)
         selected_features = set()
         for clause in clauses_sorted:
             weight = clause[0]
-            if weight > min_weight:
+            if weight > self.SIMILAR_INDEX:
                 for feature_id in clause[1]:
                     selected_features.add(self.vectorizer_X.get_feature_names_out()[feature_id])
                 if len(selected_features) > 0:
@@ -70,32 +111,21 @@ class EmbeddingAugmentor:
                     return top_features_list[0]
         return None
     
+    
     def knowledge_replacement_embeddings(self, word):
-        model = self.models.get(self.model_name)
-        
-        if self.model_name == "glove":
-            if word in model:
-                similar_words = [(w, np.dot(model[word], model[w])) for w in model.keys()]
-                similar_words.sort(key=lambda x: -x[1])
-                return similar_words[0][0] if similar_words else word
-        elif self.model_name == "fasttext":
-            try:
-                similar_words = model.get_nearest_neighbors(word)
-                return similar_words[0][1] if similar_words else word
-            except KeyError:
-                return word
-        elif self.model_name == "word2vec":
-            if word in model.wv:
-                similar_words = model.wv.most_similar(word)
-                return similar_words[0][0] if similar_words else word
-        elif self.model_name == "tmae":
-            try:
+        try:
+            if self.model_name == "glove":
+                return self.glove_knowledge_replacement(word)
+            elif self.model_name == "fasttext":
+                return self.fasttext_knowledge_replacement(word)
+            elif self.model_name == "word2vec":
+                return self.word2vec_knowledge_replacement(word)
+            elif self.model_name == "tmae":
                 return self.tmae_knowledge_replacement(word)
-            except KeyError:
-                return word
-        else:
-            raise ValueError(f"Unsupported model: {self.model_name}")
-        return word
+            else:
+                raise ValueError(f"Unsupported model: {self.model_name}")
+        except KeyError:
+            return word
 
     def do(self, sentence, percentage):
         original_words = sentence.split()  # Keeps original sentence structure
