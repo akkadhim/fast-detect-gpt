@@ -41,3 +41,9 @@ def get_only_chars(line):
     if clean_line and clean_line[0] == ' ':
         clean_line = clean_line[1:]
     return clean_line
+
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub(r"[^a-zA-Z0-9\s]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text

@@ -1,19 +1,21 @@
+import text_organizer
 import numpy as np
 import fasttext
 from gensim.models import Word2Vec
 from directories import dicrectories
 from tools import tools
-import text_organizer
 import random
 import tensorflow as tf
 import tensorflow_hub as hub
 import torch
 from transformers import BertTokenizer, BertModel
 from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor
-
+import nltk
+nltk.download('punkt')
+nltk.download('punkt_tab')
+ 
 class EmbeddingAugmentor:
-    MODELS = ['glove', 'fasttext', 'word2vec', 'tmae']
+    MODELS = ['glove', 'fasttext', 'word2vec', 'tmae', 'elmo', 'bert']
     SIMILAR_SIZE = 400
     SIMILAR_INDEX = 5
     
@@ -27,7 +29,7 @@ class EmbeddingAugmentor:
             "tmae": None
         }
         if model_name == "glove":
-            self.load_glove_embeddings('IMDB/vectors.txt')
+            self.load_glove_embeddings('IMDB/glove_vectors.txt')
         elif model_name == "fasttext":
             self.load_fasttext_model('IMDB/fasttext_model.bin')
         elif model_name == "word2vec":
@@ -35,11 +37,11 @@ class EmbeddingAugmentor:
         elif model_name == "elmo":
             self.load_elmo_model("https://tfhub.dev/google/elmo/3")
         elif model_name == "bert":
-            self.load_bert_model('my_pretrained_bert')
+            self.load_bert_model('IMDB/my_pretrained_bert')
         elif model_name == "tmae":
-            self.load_tmae_model('vectorizer_X.pickle')
+            self.load_tmae_model('IMDB/tmae_vectorizer_X.pickle')
       
-    def cosine_similarity(vec1, vec2):
+    def cosine_similarity(self, vec1, vec2):
         dot_product = np.dot(vec1, vec2)
         norm_vec1 = np.linalg.norm(vec1)
         norm_vec2 = np.linalg.norm(vec2)
@@ -61,13 +63,20 @@ class EmbeddingAugmentor:
         if word not in glove_vectors:
             return []
         word_vector = glove_vectors[word]
+        
+        sampled_vocab = random.sample(list(glove_vectors.keys()), self.SIMILAR_SIZE)
         similarities = {}
-        for other_word, other_vector in glove_vectors.items():
+        for other_word in sampled_vocab:
             if other_word != word:
+                other_vector = glove_vectors[other_word]
                 similarities[other_word] = self.cosine_similarity(word_vector, other_vector)
-        # Sort by similarity score
+        
         sorted_similarities = sorted(similarities.items(), key=lambda item: item[1], reverse=False)
-        return sorted_similarities[0]
+        
+        if self.SIMILAR_INDEX < len(sorted_similarities):
+            return sorted_similarities[self.SIMILAR_INDEX][0]  
+        else:
+            return None  
 
     # FastText
     def load_fasttext_model(self, fasttext_path):
@@ -78,7 +87,7 @@ class EmbeddingAugmentor:
         if word in fasttext_vectors.words:
             similar_words = fasttext_vectors.get_nearest_neighbors(word, k=self.SIMILAR_SIZE)  
             similar_words = [w for _, w in similar_words]  
-            return similar_words[self.SIMILAR_INDEX]  
+            return similar_words[-self.SIMILAR_INDEX - 1]  
         else: 
             return None
 
@@ -90,8 +99,8 @@ class EmbeddingAugmentor:
         word2vec_vectors = self.models["word2vec"]
         if word in word2vec_vectors.wv:
             similar_words = word2vec_vectors.wv.most_similar(word, topn=self.SIMILAR_SIZE)
-            return similar_words[self.SIMILAR_INDEX]  
-        else: 
+            return similar_words[-self.SIMILAR_INDEX - 1][0]  # Negative indexing
+        else:
             return None
   
     # ELMO
@@ -99,9 +108,17 @@ class EmbeddingAugmentor:
         self.models["elmo"] = hub.load(elmo_path)
         
     def build_elmo_doc_embeddings(self, doc):
-        tokens = doc.split()
+        cleaned_doc = text_organizer.preprocess_text(doc)
+        cleaned_doc = text_organizer.get_only_chars(cleaned_doc)
+        tokens = cleaned_doc.split()
+
         elmo_vectors = self.models["elmo"]
-        embeddings = (elmo_vectors.signatures['default'](tf.constant(tokens))["elmo"]).numpy()
+        tokens_tensor = tf.constant(tokens)  # `tokens` should be a list of strings
+        print(f"Tokens Tensor Shape: {tokens_tensor.shape}")
+
+        outputs = elmo_vectors.signatures['default'](tokens_tensor)
+        embeddings = outputs["elmo"].numpy()
+        
         doc_embeddings = dict(zip(tokens, embeddings))
         self.elmo_doc_embeddings = doc_embeddings
         self.elmo_doc_tokens = list(doc_embeddings.keys()) 
@@ -151,7 +168,7 @@ class EmbeddingAugmentor:
     def load_bert_model(self, path):
         self.bert_tokenizer = BertTokenizer.from_pretrained(path)
         self.bert_model = BertModel.from_pretrained(path)
-        self.vocab_embeddings = np.load("vocab_embeddings.npy", allow_pickle=True).item()
+        self.vocab_embeddings = np.load(path + "/vocab_embeddings.npy", allow_pickle=True).item()
         
     def bert_knowledge_replacement(self, word):
         # Get the embedding of the target word

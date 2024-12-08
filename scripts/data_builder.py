@@ -326,7 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
     parser.add_argument('--bypass_genearation', type=str, default="True")
-    parser.add_argument('--augmentor', type=str, default="tmae")
+    parser.add_argument('--augmentor', type=str, default="elmo")
     parser.add_argument('--augment_percnt', type=int, default=5)
     args = parser.parse_args()
 
@@ -348,4 +348,4 @@ if __name__ == '__main__':
         print(f'Augmenting using {args.augmentor}...')
         data_builder = DataBuilder(args)
         augmented_data = data_builder.generate_augmented_samples(batch_size=args.batch_size)
-        append_augmented_to_file(args.output_file, augmented_data, args.augmentor)
+        # append_augmented_to_file(args.output_file, augmented_data, args.augmentor)
