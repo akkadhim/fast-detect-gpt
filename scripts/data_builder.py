@@ -5,7 +5,6 @@
 import time
 
 import numpy as np
-import datasets
 import torch
 import random
 import argparse
@@ -326,7 +325,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
     parser.add_argument('--bypass_genearation', type=str, default="True")
-    parser.add_argument('--augmentor', type=str, default="elmo")
+    parser.add_argument('--augmentor', type=str, default="bert")
     parser.add_argument('--augment_percnt', type=int, default=5)
     args = parser.parse_args()
 

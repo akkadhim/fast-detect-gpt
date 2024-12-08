@@ -8,8 +8,8 @@ import random
 import tensorflow as tf
 import tensorflow_hub as hub
 import torch
-from transformers import BertTokenizer, BertModel
-from tqdm import tqdm
+from transformers import BertTokenizer, BertModel, BertForSequenceClassification
+from safetensors import safe_open
 import nltk
 nltk.download('punkt')
 nltk.download('punkt_tab')
@@ -37,7 +37,7 @@ class EmbeddingAugmentor:
         elif model_name == "elmo":
             self.load_elmo_model("https://tfhub.dev/google/elmo/3")
         elif model_name == "bert":
-            self.load_bert_model('IMDB/my_pretrained_bert')
+            self.load_bert_model("IMDB/pretrained_bert")
         elif model_name == "tmae":
             self.load_tmae_model('IMDB/tmae_vectorizer_X.pickle')
       
@@ -166,8 +166,12 @@ class EmbeddingAugmentor:
     
     # BERT
     def load_bert_model(self, path):
+        safetensors_path = path + "/model.safetensors"
+        with safe_open(safetensors_path, "r") as f:
+            state_dict = f.get_dict()
         self.bert_tokenizer = BertTokenizer.from_pretrained(path)
-        self.bert_model = BertModel.from_pretrained(path)
+        model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
+        self.bert_model = model.load_state_dict(state_dict)
         self.vocab_embeddings = np.load(path + "/vocab_embeddings.npy", allow_pickle=True).item()
         
     def bert_knowledge_replacement(self, word):
