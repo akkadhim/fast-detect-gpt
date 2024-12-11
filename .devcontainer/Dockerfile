@@ -1,7 +1,9 @@
 FROM nvidia/cuda:12.3.2-cudnn9-devel-ubuntu22.04
 
 # Install Python and other dependencies
-RUN apt-get update && apt-get install -y python3-pip git
+# RUN apt-get update && apt-get install -y python3-pip git
+RUN apt-get update && \
+    apt-get install -y python3.11 python3.11-pip git
 
 COPY . /app
 WORKDIR /app
