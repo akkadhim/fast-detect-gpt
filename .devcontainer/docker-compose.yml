@@ -9,4 +9,5 @@ services:
           devices:
             - driver: nvidia
               capabilities: [gpu]
-              count: all # Assign number of GPUs or use 'all' to assign all available GPUs
+              device_ids: ["7"]
+              # count: 1 # Assign number of GPUs or use 'all' to assign all available GPUs
