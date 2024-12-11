@@ -8,8 +8,7 @@ import random
 import tensorflow as tf
 import tensorflow_hub as hub
 import torch
-from transformers import BertTokenizer, BertModel, BertForSequenceClassification
-from safetensors import safe_open
+from transformers import BertTokenizer, BertModel
 import nltk
 nltk.download('punkt')
 nltk.download('punkt_tab')
@@ -108,20 +107,18 @@ class EmbeddingAugmentor:
         self.models["elmo"] = hub.load(elmo_path)
         
     def build_elmo_doc_embeddings(self, doc):
-        cleaned_doc = text_organizer.preprocess_text(doc)
-        cleaned_doc = text_organizer.get_only_chars(cleaned_doc)
-        tokens = cleaned_doc.split()
-
-        elmo_vectors = self.models["elmo"]
-        tokens_tensor = tf.constant(tokens)  # `tokens` should be a list of strings
-        print(f"Tokens Tensor Shape: {tokens_tensor.shape}")
-
-        outputs = elmo_vectors.signatures['default'](tokens_tensor)
-        embeddings = outputs["elmo"].numpy()
+        word_embeddings = []
+        sentences = doc.split('. ')
+        for sentence in sentences:
+            sentence_tensor = tf.convert_to_tensor([sentence])
+            # Extract the "elmo" output
+            elmo = self.models["elmo"]
+            embeddings = elmo(sentence, signature="default")["elmo"]
+            
+            elmo_output = elmo(sentence_tensor)
+            word_embeddings.append(elmo_output["elmo"].numpy().mean(axis=1))  # Average over word embeddings
         
-        doc_embeddings = dict(zip(tokens, embeddings))
-        self.elmo_doc_embeddings = doc_embeddings
-        self.elmo_doc_tokens = list(doc_embeddings.keys()) 
+        self.elmo_doc_embeddings = word_embeddings
     
     def elmo_knowledge_replacement(self, word) :
         word_embedding = self.elmo_doc_embeddings[word]
@@ -166,33 +163,35 @@ class EmbeddingAugmentor:
     
     # BERT
     def load_bert_model(self, path):
-        safetensors_path = path + "/model.safetensors"
-        with safe_open(safetensors_path, "r") as f:
-            state_dict = f.get_dict()
         self.bert_tokenizer = BertTokenizer.from_pretrained(path)
-        model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
-        self.bert_model = model.load_state_dict(state_dict)
-        self.vocab_embeddings = np.load(path + "/vocab_embeddings.npy", allow_pickle=True).item()
+        self.bert_model = BertModel.from_pretrained(path)
+        # self.vocab_embeddings = np.load(path + "/vocab_embeddings.npy", allow_pickle=True).item()
+        self.bert_model.eval()
         
-    def bert_knowledge_replacement(self, word):
-        # Get the embedding of the target word
-        if word not in self.vocab_embeddings:
-            inputs = self.bert_tokenizer(word, return_tensors="pt")
-            with torch.no_grad():
-                outputs = self.bert_model.bert(**inputs)
-            target_embedding = outputs.last_hidden_state[0, 1, :].numpy()
+    def bert_knowledge_replacement(self, target_word):       
+        # Identify the target word's position
+        try:
+            target_idx = self.bert_doc_tokens.index(target_word)
+        except ValueError:
+            return None
+        
+        target_embedding = self.bert_doc_embeddings[target_idx].numpy()
+        # Compute similarity with all words in the vocabulary
+        similar_words = {}
+        for word in self.bert_doc_vocabulary:
+            if target_word != word:
+                word_inputs = self.bert_tokenizer(word, return_tensors="pt")
+                with torch.no_grad():
+                    word_embedding = self.bert_model(**word_inputs).last_hidden_state.mean(dim=1).squeeze(0).numpy()
+                similarity = self.cosine_similarity(target_embedding, word_embedding)
+                similar_words[word] = similarity
+        
+        sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
+        
+        if len(sorted_similarities) > 0:
+            return sorted_similarities[0][0]  
         else:
-            target_embedding = self.vocab_embeddings[word]
-        
-        # Calculate similarities
-        similarities = []
-        for word, embedding in self.vocab_embeddings.items():
-            similarity = self.cosine_similarity([target_embedding], [embedding])[0][0]
-            similarities.append((word, similarity))
-        
-        # Sort by similarity and return top N words
-        similarities.sort(key=lambda x: x[1], reverse=False)
-        return similarities[self.SIMILAR_INDEX]
+            return None 
 
     
     def knowledge_replacement_embeddings(self, word):
@@ -217,7 +216,21 @@ class EmbeddingAugmentor:
     def do(self, doc, percentage):
         if (self.model_name == "elmo"):
             self.build_elmo_doc_embeddings(doc)
-        
+            
+        if (self.model_name == "bert"):
+            vocabulary = text_organizer.get_only_chars(doc)
+            vocabulary = vocabulary.split()
+            vocabulary = [word.lower() for word in vocabulary if word != '']  # Filter out empty strings
+            
+            self.bert_doc_vocabulary = vocabulary
+            inputs = self.bert_tokenizer(doc, return_tensors="pt", padding=True, truncation=True)
+            token_ids = inputs["input_ids"][0]
+            self.bert_doc_tokens = self.bert_tokenizer.convert_ids_to_tokens(token_ids)
+            # Get BERT embeddings
+            with torch.no_grad():
+                outputs = self.bert_model(**inputs)
+            self.bert_doc_embeddings = outputs.last_hidden_state[0]  # Shape: (sequence_length, hidden_size)
+            
         aug_text = '' 
         sentences = doc.split('. ')
         for sentence in sentences:
