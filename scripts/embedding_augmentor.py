@@ -177,7 +177,21 @@ class EmbeddingAugmentor:
         self.bert_model = BertModel.from_pretrained(path)
         # self.vocab_embeddings = np.load(path + "/vocab_embeddings.npy", allow_pickle=True).item()
         self.bert_model.eval()
+    
+    def build_bert_doc_embeddings(self, doc):
+        vocabulary = text_organizer.get_only_chars(doc)
+        vocabulary = vocabulary.split()
+        vocabulary = [word.lower() for word in vocabulary if word != '']  # Filter out empty strings
         
+        self.bert_doc_vocabulary = vocabulary
+        inputs = self.bert_tokenizer(doc, return_tensors="pt", padding=True, truncation=True)
+        token_ids = inputs["input_ids"][0]
+        self.bert_doc_tokens = self.bert_tokenizer.convert_ids_to_tokens(token_ids)
+        # Get BERT embeddings
+        with torch.no_grad():
+            outputs = self.bert_model(**inputs)
+        self.bert_doc_embeddings = outputs.last_hidden_state[0]  # Shape: (sequence_length, hidden_size)
+
     def bert_knowledge_replacement(self, word):       
         # Identify the target word's position
         try:
@@ -226,21 +240,12 @@ class EmbeddingAugmentor:
     def do(self, doc, percentage):
         if (self.model_name == "elmo"):
             self.build_elmo_doc_embeddings(doc)
-            
-        if (self.model_name == "bert"):
-            vocabulary = text_organizer.get_only_chars(doc)
-            vocabulary = vocabulary.split()
-            vocabulary = [word.lower() for word in vocabulary if word != '']  # Filter out empty strings
-            
-            self.bert_doc_vocabulary = vocabulary
-            inputs = self.bert_tokenizer(doc, return_tensors="pt", padding=True, truncation=True)
-            token_ids = inputs["input_ids"][0]
-            self.bert_doc_tokens = self.bert_tokenizer.convert_ids_to_tokens(token_ids)
-            # Get BERT embeddings
-            with torch.no_grad():
-                outputs = self.bert_model(**inputs)
-            self.bert_doc_embeddings = outputs.last_hidden_state[0]  # Shape: (sequence_length, hidden_size)
-            
+        elif (self.model_name == "bert"):
+            self.build_bert_doc_embeddings(doc)
+        
+        print("=============================================================================")
+        print(doc)
+
         aug_text = '' 
         sentences = doc.split('. ')
         for sentence in sentences:
@@ -264,6 +269,7 @@ class EmbeddingAugmentor:
             num_replaced = 0
             for random_word in random_word_list:
                 synonym = self.knowledge_replacement_embeddings(random_word)
+                print(random_word," ===== will be =====",synonym)
                 if synonym:
                     # Replace only the matching words, preserving the original format
                     new_sentence = [
@@ -275,6 +281,9 @@ class EmbeddingAugmentor:
                     break
 
             aug_text = aug_text + ' '.join(new_sentence) + '. '
+
+        print("=============================================================================")
+        print(aug_text)
         return aug_text
     
     
