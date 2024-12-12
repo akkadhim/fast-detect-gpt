@@ -7,3 +7,7 @@ tqdm
 openai
 nltk
 scikit-learn
+fasttext
+gensim
+tensorflow
+tensorflow_hub

@@ -25,7 +25,8 @@ class EmbeddingAugmentor:
             "fasttext": None,
             "word2vec": None,
             "elmo": None,
-            "tmae": None
+            "tmae": None,
+            "bert": None,
         }
         if model_name == "glove":
             self.load_glove_embeddings('IMDB/glove_vectors.txt')
@@ -175,7 +176,6 @@ class EmbeddingAugmentor:
     def load_bert_model(self, path):
         self.bert_tokenizer = BertTokenizer.from_pretrained(path)
         self.bert_model = BertModel.from_pretrained(path)
-        # self.vocab_embeddings = np.load(path + "/vocab_embeddings.npy", allow_pickle=True).item()
         self.bert_model.eval()
     
     def build_bert_doc_embeddings(self, doc):
@@ -243,8 +243,8 @@ class EmbeddingAugmentor:
         elif (self.model_name == "bert"):
             self.build_bert_doc_embeddings(doc)
         
-        print("=============================================================================")
-        print(doc)
+        # print("=============================================================================")
+        # print(doc)
 
         aug_text = '' 
         sentences = doc.split('. ')
@@ -269,7 +269,7 @@ class EmbeddingAugmentor:
             num_replaced = 0
             for random_word in random_word_list:
                 synonym = self.knowledge_replacement_embeddings(random_word)
-                print(random_word," ===== will be =====",synonym)
+                # print(random_word," ===== will be =====",synonym)
                 if synonym:
                     # Replace only the matching words, preserving the original format
                     new_sentence = [
@@ -282,8 +282,8 @@ class EmbeddingAugmentor:
 
             aug_text = aug_text + ' '.join(new_sentence) + '. '
 
-        print("=============================================================================")
-        print(aug_text)
+        # print("=============================================================================")
+        # print(aug_text)
         return aug_text
     
     
