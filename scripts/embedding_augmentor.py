@@ -80,7 +80,7 @@ class EmbeddingAugmentor:
         
         dynamic_index = self.get_dynamic_index(similar_words)
         if 0 <= dynamic_index < len(similar_words):
-            return similar_words[dynamic_index]
+            return similar_words[dynamic_index][0]
         else:
             return None 
 
@@ -139,7 +139,7 @@ class EmbeddingAugmentor:
         sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
         dynamic_index = self.get_dynamic_index(sorted_similarities)
         if 0 <= dynamic_index < len(sorted_similarities):
-            return sorted_similarities[dynamic_index]
+            return sorted_similarities[dynamic_index][0]
         else:
             return None
     
@@ -199,7 +199,7 @@ class EmbeddingAugmentor:
         sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
         dynamic_index = self.get_dynamic_index(sorted_similarities)
         if 0 <= dynamic_index < len(sorted_similarities):
-            return sorted_similarities[dynamic_index]
+            return sorted_similarities[dynamic_index][0] 
         else:
             return None
 
