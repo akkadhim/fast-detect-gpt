@@ -114,9 +114,12 @@ class EmbeddingAugmentor:
         
         embeddings = (elmo_model.signatures['default'](tf.constant(tokens))["elmo"]).numpy()
         self.elmo_doc_tokens = tokens
-        self.elmo_doc_embeddings = embeddings
+        self.elmo_doc_embeddings = {token: embeddings[i] for i, token in enumerate(tokens)}
     
     def elmo_knowledge_replacement(self, word) :
+        if word not in self.elmo_doc_embeddings:
+            return None 
+        
         word_embedding = self.elmo_doc_embeddings[word]
         # Compute cosine similarities for the word with all other words in the document
         similar_words = {}
