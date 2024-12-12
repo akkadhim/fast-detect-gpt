@@ -17,7 +17,7 @@ mkdir -p $exp_path $data_path $res_path
 datasets="writing xsum squad"
 source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
 # embedding_source="glove fasttext word2vec tmae elmo bert"
-embedding_source="glove fasttext word2vec tmae bert"
+embedding_source="glove fasttext word2vec tmae"
 
 # # preparing dataset
 # for D in $datasets; do
