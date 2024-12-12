@@ -192,30 +192,69 @@ class EmbeddingAugmentor:
             outputs = self.bert_model(**inputs)
         self.bert_doc_embeddings = outputs.last_hidden_state[0]  # Shape: (sequence_length, hidden_size)
 
-    def bert_knowledge_replacement(self, word):       
-        # Identify the target word's position
+    def bert_knowledge_replacement(self, word):
         try:
+            # Identify the target word's position
             target_idx = self.bert_doc_tokens.index(word)
         except ValueError:
             return None
         
+        # Get the target embedding
         target_embedding = self.bert_doc_embeddings[target_idx].numpy()
-        # Compute similarity with all words in the vocabulary
-        similar_words = {}
-        for other_word in self.bert_doc_vocabulary:
-            if word != other_word:
-                word_inputs = self.bert_tokenizer(other_word, return_tensors="pt")
-                with torch.no_grad():
-                    word_embedding = self.bert_model(**word_inputs).last_hidden_state.mean(dim=1).squeeze(0).numpy()
-                similarity = self.cosine_similarity(target_embedding, word_embedding)
-                similar_words[other_word] = similarity
-        
-        sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
+
+        # Precompute embeddings for all words in the vocabulary if not already done
+        if not hasattr(self, "bert_vocab_embeddings"):
+            word_inputs = self.bert_tokenizer(self.bert_doc_vocabulary, return_tensors="pt", padding=True, truncation=True)
+            with torch.no_grad():
+                word_embeddings = self.bert_model(**word_inputs).last_hidden_state.mean(dim=1)
+            self.bert_vocab_embeddings = word_embeddings.numpy()
+
+        # Compute cosine similarities in bulk
+        vocab_embeddings = self.bert_vocab_embeddings
+        target_embedding = target_embedding / np.linalg.norm(target_embedding)  # Normalize
+        vocab_embeddings = vocab_embeddings / np.linalg.norm(vocab_embeddings, axis=1, keepdims=True)  # Normalize
+        similarities = np.dot(vocab_embeddings, target_embedding)
+
+        # Create a mapping of words to their similarity scores
+        similar_words = {word: sim for word, sim in zip(self.bert_doc_vocabulary, similarities)}
+
+        # Exclude the target word itself
+        similar_words.pop(word, None)
+
+        # Sort by similarity
+        sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=True)
+
+        # Get dynamic index and retrieve the word
         dynamic_index = self.get_dynamic_index(sorted_similarities)
         if 0 <= dynamic_index < len(sorted_similarities):
-            return sorted_similarities[dynamic_index][0] 
+            return sorted_similarities[dynamic_index][0]
         else:
             return None
+    
+    # def bert_knowledge_replacement(self, word):       
+    #     # Identify the target word's position
+    #     try:
+    #         target_idx = self.bert_doc_tokens.index(word)
+    #     except ValueError:
+    #         return None
+        
+    #     target_embedding = self.bert_doc_embeddings[target_idx].numpy()
+    #     # Compute similarity with all words in the vocabulary
+    #     similar_words = {}
+    #     for other_word in self.bert_doc_vocabulary:
+    #         if word != other_word:
+    #             word_inputs = self.bert_tokenizer(other_word, return_tensors="pt")
+    #             with torch.no_grad():
+    #                 word_embedding = self.bert_model(**word_inputs).last_hidden_state.mean(dim=1).squeeze(0).numpy()
+    #             similarity = self.cosine_similarity(target_embedding, word_embedding)
+    #             similar_words[other_word] = similarity
+        
+    #     sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
+    #     dynamic_index = self.get_dynamic_index(sorted_similarities)
+    #     if 0 <= dynamic_index < len(sorted_similarities):
+    #         return sorted_similarities[dynamic_index][0] 
+    #     else:
+    #         return None
 
     
     def knowledge_replacement_embeddings(self, word):
