@@ -107,31 +107,30 @@ class EmbeddingAugmentor:
         self.models["elmo"] = hub.load(elmo_path)
         
     def build_elmo_doc_embeddings(self, doc):
-        word_embeddings = []
-        sentences = doc.split('. ')
-        for sentence in sentences:
-            sentence_tensor = tf.convert_to_tensor([sentence])
-            # Extract the "elmo" output
-            elmo = self.models["elmo"]
-            embeddings = elmo(sentence, signature="default")["elmo"]
-            
-            elmo_output = elmo(sentence_tensor)
-            word_embeddings.append(elmo_output["elmo"].numpy().mean(axis=1))  # Average over word embeddings
+        vocabulary = text_organizer.get_only_chars(doc)
+        vocabulary = vocabulary.split()
+        tokens = [word.lower() for word in vocabulary if word != '']  # Filter out empty strings
+        elmo_model = self.models["elmo"]
         
-        self.elmo_doc_embeddings = word_embeddings
+        embeddings = (elmo_model.signatures['default'](tf.constant(tokens))["elmo"]).numpy()
+        self.elmo_doc_tokens = tokens
+        self.elmo_doc_embeddings = embeddings
     
     def elmo_knowledge_replacement(self, word) :
         word_embedding = self.elmo_doc_embeddings[word]
         # Compute cosine similarities for the word with all other words in the document
-        similarities = []
-        for j, other_word in enumerate(self.elmo_doc_tokens):
-            if j != word:  # Do not compare with itself
+        similar_words = {}
+        for other_word in self.elmo_doc_tokens:
+            if other_word != word:  # Do not compare with itself
                 other_word_embedding = self.elmo_doc_embeddings[other_word]
                 similarity = self.cosine_similarity(word_embedding, other_word_embedding)
-                similarities.append((similarity, other_word))
+                similar_words[word] = similarity
 
-        most_similar = sorted(similarities, key=lambda x: x[0], reverse=False)
-        return ([w for _, w in most_similar])[self.SIMILAR_INDEX]
+        sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
+        if len(sorted_similarities) > 0:
+            return sorted_similarities[0][0]  
+        else:
+            return None 
     
     # TM-AE
     def load_tmae_model(self, path):
