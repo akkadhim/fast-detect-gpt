@@ -46,6 +46,12 @@ class EmbeddingAugmentor:
         norm_vec2 = np.linalg.norm(vec2)
         return dot_product / (norm_vec1 * norm_vec2)
     
+    def get_dynamic_index(self, similar_words):
+        ratio = self.SIMILAR_INDEX / self.SIMILAR_SIZE
+        actual_size = len(similar_words)
+        dynamic_index = int(round(ratio * actual_size))
+        return dynamic_index
+    
     # GloVe
     def load_glove_embeddings(self, glove_file_path):
         embeddings_index = {}
@@ -70,12 +76,13 @@ class EmbeddingAugmentor:
                 other_vector = glove_vectors[other_word]
                 similarities[other_word] = self.cosine_similarity(word_vector, other_vector)
         
-        sorted_similarities = sorted(similarities.items(), key=lambda item: item[1], reverse=False)
+        similar_words = sorted(similarities.items(), key=lambda item: item[1], reverse=False)
         
-        if self.SIMILAR_INDEX < len(sorted_similarities):
-            return sorted_similarities[self.SIMILAR_INDEX][0]  
+        dynamic_index = self.get_dynamic_index(similar_words)
+        if 0 <= dynamic_index < len(similar_words):
+            return similar_words[dynamic_index]
         else:
-            return None  
+            return None 
 
     # FastText
     def load_fasttext_model(self, fasttext_path):
@@ -120,20 +127,21 @@ class EmbeddingAugmentor:
         if word not in self.elmo_doc_embeddings:
             return None 
         
-        word_embedding = self.elmo_doc_embeddings[word]
+        word_embedding = self.elmo_doc_embeddings[word][0]
         # Compute cosine similarities for the word with all other words in the document
         similar_words = {}
         for other_word in self.elmo_doc_tokens:
             if other_word != word:  # Do not compare with itself
-                other_word_embedding = self.elmo_doc_embeddings[other_word]
+                other_word_embedding = self.elmo_doc_embeddings[other_word][0]
                 similarity = self.cosine_similarity(word_embedding, other_word_embedding)
-                similar_words[word] = similarity
+                similar_words[other_word] = similarity
 
         sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
-        if len(sorted_similarities) > 0:
-            return sorted_similarities[0][0]  
+        dynamic_index = self.get_dynamic_index(sorted_similarities)
+        if 0 <= dynamic_index < len(sorted_similarities):
+            return sorted_similarities[dynamic_index]
         else:
-            return None 
+            return None
     
     # TM-AE
     def load_tmae_model(self, path):
@@ -170,30 +178,30 @@ class EmbeddingAugmentor:
         # self.vocab_embeddings = np.load(path + "/vocab_embeddings.npy", allow_pickle=True).item()
         self.bert_model.eval()
         
-    def bert_knowledge_replacement(self, target_word):       
+    def bert_knowledge_replacement(self, word):       
         # Identify the target word's position
         try:
-            target_idx = self.bert_doc_tokens.index(target_word)
+            target_idx = self.bert_doc_tokens.index(word)
         except ValueError:
             return None
         
         target_embedding = self.bert_doc_embeddings[target_idx].numpy()
         # Compute similarity with all words in the vocabulary
         similar_words = {}
-        for word in self.bert_doc_vocabulary:
-            if target_word != word:
-                word_inputs = self.bert_tokenizer(word, return_tensors="pt")
+        for other_word in self.bert_doc_vocabulary:
+            if word != other_word:
+                word_inputs = self.bert_tokenizer(other_word, return_tensors="pt")
                 with torch.no_grad():
                     word_embedding = self.bert_model(**word_inputs).last_hidden_state.mean(dim=1).squeeze(0).numpy()
                 similarity = self.cosine_similarity(target_embedding, word_embedding)
-                similar_words[word] = similarity
+                similar_words[other_word] = similarity
         
         sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
-        
-        if len(sorted_similarities) > 0:
-            return sorted_similarities[0][0]  
+        dynamic_index = self.get_dynamic_index(sorted_similarities)
+        if 0 <= dynamic_index < len(sorted_similarities):
+            return sorted_similarities[dynamic_index]
         else:
-            return None 
+            return None
 
     
     def knowledge_replacement_embeddings(self, word):
