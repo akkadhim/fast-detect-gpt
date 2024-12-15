@@ -12,6 +12,7 @@ import json
 from data_builder import load_data
 from model import load_tokenizer, load_model
 from metrics import get_roc_metrics, get_precision_recall_metrics
+from embedding_augmentor import EmbeddingAugmentor
 
 def get_likelihood(logits, labels):
     assert logits.shape[0] == 1
@@ -78,15 +79,17 @@ def experiment(args):
                      'rank': get_rank,
                      'logrank': get_logrank,
                      'entropy': get_entropy}
+    augmentation_models = EmbeddingAugmentor().MODELS
     for name in criterion_fns:
         criterion_fn = criterion_fns[name]
         torch.manual_seed(args.seed)
         np.random.seed(args.seed)
         eval_results = []
+        
         for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
             original_text = data["original"][idx]
             sampled_text = data["sampled"][idx]
-            augmented_text = data["augmented_" + args.augmentor][idx]  # Augmented data added here
+            augmentor_criteria = {}
             # original text
             tokenized = scoring_tokenizer(original_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
             labels = tokenized.input_ids[:, 1:]
@@ -100,39 +103,51 @@ def experiment(args):
                 logits = scoring_model(**tokenized).logits[:, :-1]
                 sampled_crit = criterion_fn(logits, labels)
             # augmented text
-            tokenized = scoring_tokenizer(augmented_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
-            labels = tokenized.input_ids[:, 1:]
-            with torch.no_grad():
-                logits = scoring_model(**tokenized).logits[:, :-1]
-                augmented_crit = criterion_fn(logits, labels)    
+            for model_name in augmentation_models:
+                augmented_text = data[f"augmented_{model_name}"][idx]
+                tokenized = scoring_tokenizer(augmented_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
+                labels = tokenized.input_ids[:, 1:]
+                with torch.no_grad():
+                    logits = scoring_model(**tokenized).logits[:, :-1]
+                    augmentor_criteria[model_name] = criterion_fn(logits, labels)
+
             # result
             eval_results.append({
-                "original": original_text,
                 "original_crit": original_crit,
-                "sampled": sampled_text,
                 "sampled_crit": sampled_crit,
-                "augmented": augmented_text,  
-                "augmented_crit": augmented_crit 
+                "augmentors_crit": augmentor_criteria 
             })
 
         # compute prediction scores for real/sampled passages
         predictions = {
             'real': [x["original_crit"] for x in eval_results],
             'samples': [x["sampled_crit"] for x in eval_results],
-            'augmented': [x["augmented_crit"] for x in eval_results]  # Add augmented predictions
+            'augmentors_crit': {model: [x["augmentors_crit"][model] for x in eval_results] for model in augmentation_models}
         }
 
         fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
         p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
-
-        fpr2, tpr2, roc_auc2 = get_roc_metrics(predictions['real'], predictions['augmented'])
-        p2, r2, pr_auc2 = get_precision_recall_metrics(predictions['real'], predictions['augmented'])
+        
+        augmentor_metrics = {}
+        for model in augmentation_models:
+            fpr_model, tpr_model, roc_auc_model = get_roc_metrics(predictions['real'], predictions['augmentors_crit'][model])
+            p_model, r_model, pr_auc_model = get_precision_recall_metrics(predictions['real'], predictions['augmentors_crit'][model])
+            augmentor_metrics[model] = {
+                'roc_auc': roc_auc_model,
+                'fpr': fpr_model,
+                'tpr': tpr_model,
+                'pr_auc': pr_auc_model,
+                'precision': p_model,
+                'recall': r_model,
+                'loss': 1 - pr_auc_model
+            }
 
         print(f"Criterion {name}_threshold ROC AUC sampled: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
-        print(f"Criterion {name}_threshold ROC AUC augmented: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
+        for model, metrics in augmentor_metrics.items():
+            print(f"Criterion {name}_threshold ROC AUC {model}: {metrics['roc_auc']:.4f}, PR AUC: {metrics['pr_auc']:.4f}")
 
         # log results
-        results_file = f'{args.output_file}.{name}.json'
+        results_file = f'{args.output_file}.baseline.{name}.json'
         results = { 
             'name': f'{name}_threshold',
             'info': {'n_samples': n_samples},
@@ -141,25 +156,22 @@ def experiment(args):
             'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
             'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
             'loss': 1 - pr_auc,
-            'metrics augmented': {'roc_auc2': roc_auc2, 'fpr2': fpr2, 'tpr2': tpr2},
-            'pr_metrics augmented': {'pr_auc2': pr_auc2, 'precision2': p2, 'recall2': r2},
-            'loss augmented': 1 - pr_auc2
+            'augmentor_metrics': augmentor_metrics
         }
         
         with open(results_file, 'w') as fout:
-            json.dump(results, fout)
+            json.dump(results, fout, indent=4)
             print(f'Results written into {results_file}')
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--output_file', type=str, default="./exp_test/results/xsum_gpt2")
-    parser.add_argument('--dataset', type=str, default="xsum")
-    parser.add_argument('--dataset_file', type=str, default="./exp_test/data/xsum_gpt2")
-    parser.add_argument('--scoring_model_name', type=str, default="gpt2")
+    parser = argparse.ArgumentParser()   
+    parser.add_argument('--output_file', type=str, default="exp_main/results/white/fast/xsum_gpt2-xl")
+    parser.add_argument('--dataset', type=str, default="xsum") 
+    parser.add_argument('--dataset_file', type=str, default="exp_main/data/xsum_gpt2-xl")
+    parser.add_argument('--scoring_model_name', type=str, default="gpt2-xl")
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
-    parser.add_argument('--augmentor', type=str, default="tmae")
     args = parser.parse_args()
 
     experiment(args)

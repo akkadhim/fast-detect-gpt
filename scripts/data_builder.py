@@ -48,6 +48,13 @@ def append_augmented_to_file(output_file, augmented_data, augmentor):
     with open(data_file, "w") as fout:
         json.dump(existing_data, fout, indent=4)
         print(f"Augmented data appended and saved into {data_file}.")
+        
+def save_perturb_data(output_file, perturbs):
+    data_file = f"{output_file}.raw_data.json"
+    with open(data_file, "w") as fout:
+        json.dump(perturbs, fout, indent=4)
+        print(f"Prturbs data saved {data_file}.")
+
 
 def load_data(input_file):
     data_file = f"{input_file}.raw_data.json"
@@ -251,7 +258,7 @@ class DataBuilder:
                     o = o.replace(custom_datasets.SEPARATOR, ' ')
                 
                 # Trim the original and sampled texts to match lengths
-                o, s = _trim_to_shorter_length(o, s)
+                o, s = self._trim_to_shorter_length(o, s)
                 
                 # Add to the data
                 data["original"].append(o)

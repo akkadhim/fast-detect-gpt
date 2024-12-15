@@ -18,6 +18,7 @@ from data_builder import load_data
 from model import load_tokenizer, load_model
 from metrics import get_roc_metrics, get_precision_recall_metrics
 import custom_datasets
+from embedding_augmentor import EmbeddingAugmentor
 
 class PrefixSampler:
     def __init__(self, args):
@@ -157,42 +158,55 @@ def experiment(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     results = []
+    augmentation_models = EmbeddingAugmentor().MODELS
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = data["original"][idx]
         sampled_text = data["sampled"][idx]
-        augmented_text = data["augmented_" + args.augmentor][idx]  # Augmented data added here
+        augmentor_criteria = {}
         
         # original text
         original_crit = criterion_fn(sampler, original_text)
         # sampled text
         sampled_crit = criterion_fn(sampler, sampled_text)
         # augmented text
-        augmented_crit = criterion_fn(sampler, augmented_text)
+        for model_name in augmentation_models:
+            augmented_text = data[f"augmented_{model_name}"][idx]
+            augmented_crit = criterion_fn(sampler, augmented_text)
+            augmentor_criteria[model_name] = augmented_crit
         # result
         results.append({
-            "original": original_text,
             "original_crit": original_crit,
-            "sampled": sampled_text,
             "sampled_crit": sampled_crit,
-            "augmented": augmented_text,  
-            "augmented_crit": augmented_crit  
+            "augmentors_crit": augmentor_criteria  
         })
 
     # compute prediction scores for real/sampled passages
     predictions = {
         'real': [x["original_crit"] for x in results],
         'samples': [x["sampled_crit"] for x in results],
-        'augmented': [x["augmented_crit"] for x in results]  # Add augmented predictions
+        'augmentors': {model: [x["augmentors_crit"][model] for x in results] for model in augmentation_models}
     }
 
     fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
     p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
-
-    fpr2, tpr2, roc_auc2 = get_roc_metrics(predictions['real'], predictions['augmented'])
-    p2, r2, pr_auc2 = get_precision_recall_metrics(predictions['real'], predictions['augmented'])
+    
+    augmentor_metrics = {}
+    for model in augmentation_models:
+        fpr_model, tpr_model, roc_auc_model = get_roc_metrics(predictions['real'], predictions['augmentors'][model])
+        p_model, r_model, pr_auc_model = get_precision_recall_metrics(predictions['real'], predictions['augmentors'][model])
+        augmentor_metrics[model] = {
+            'roc_auc': roc_auc_model,
+            'fpr': fpr_model,
+            'tpr': tpr_model,
+            'pr_auc': pr_auc_model,
+            'precision': p_model,
+            'recall': r_model,
+            'loss': 1 - pr_auc_model
+        }
 
     print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
-    print(f"Criterion {name}_threshold ROC AUC augmented: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
+    for model, metrics in augmentor_metrics.items():
+        print(f"Criterion {name}_threshold ROC AUC {model}: {metrics['roc_auc']:.4f}, PR AUC: {metrics['pr_auc']:.4f}")
 
     # results
     results_file = f'{args.output_file}.{name}.json'
@@ -204,22 +218,20 @@ def experiment(args):
         'metrics': {'roc_auc': roc_auc, 'fpr': fpr, 'tpr': tpr},
         'pr_metrics': {'pr_auc': pr_auc, 'precision': p, 'recall': r},
         'loss': 1 - pr_auc,
-        'metrics augmented': {'roc_auc2': roc_auc2, 'fpr2': fpr2, 'tpr2': tpr2},
-        'pr_metrics augmented': {'pr_auc2': pr_auc2, 'precision2': p2, 'recall2': r2},
-        'loss augmented': 1 - pr_auc2
+        'augmentor_metrics': augmentor_metrics
     }
     with open(results_file, 'w') as fout:
-        json.dump(results, fout)
+        json.dump(results, fout,indent=4)
         print(f'Results written into {results_file}')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_file', type=str, default="./exp_test/results/pubmed_davinci")
-    parser.add_argument('--dataset', type=str, default="pubmed")
-    parser.add_argument('--dataset_file', type=str, default="./exp_test/data/pubmed_davinci")
+    parser.add_argument('--output_file', type=str, default="exp_main/results/white/fast/xsum_gpt2-xl")
+    parser.add_argument('--dataset', type=str, default="xsum") 
+    parser.add_argument('--dataset_file', type=str, default="exp_main/data/xsum_gpt2-xl")
     parser.add_argument('--truncate_ratio', type=float, default=0.5)
     parser.add_argument('--regen_number', type=int, default=10)
-    parser.add_argument('--base_model_name', type=str, default="gpt2")
+    parser.add_argument('--base_model_name', type=str, default="gpt2-xl")
     parser.add_argument('--batch_size', type=int, default=10)
     parser.add_argument('--do_top_k', action='store_true')
     parser.add_argument('--top_k', type=int, default=40)
@@ -229,7 +241,6 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
-    parser.add_argument('--augmentor', type=str, default="tmae")
     args = parser.parse_args()
 
     experiment(args)

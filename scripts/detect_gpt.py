@@ -11,9 +11,10 @@ import torch
 import tqdm
 import argparse
 import json
-from data_builder import load_data, save_data
+from data_builder import load_data, save_perturb_data
 from metrics import get_roc_metrics, get_precision_recall_metrics
 from model import load_tokenizer, load_model, get_model_fullname, from_pretrained
+from embedding_augmentor import EmbeddingAugmentor
 
 # define regex to match all <extra_id_*> tokens, where * is an integer
 pattern = re.compile(r"<extra_id_\d+>")
@@ -163,29 +164,37 @@ def generate_perturbs(args):
     np.random.seed(args.seed)
 
     # generate perturb samples
+    augmentation_models = EmbeddingAugmentor().MODELS
     perturbs = []
     for idx in tqdm.tqdm(range(n_samples), desc=f"Perturb text"):
         original_text = data["original"][idx]
         sampled_text = data["sampled"][idx]
-        augmented_text = data["augmented"][idx]  # Augmented data added here
+        augmentor_texts = {augmentor: data[f"augmented_{augmentor}"][idx] for augmentor in augmentation_models}
+        
         # perturb
-        p_sampled_text = perturb_texts(args, mask_model, mask_tokenizer, [sampled_text for _ in range(n_perturbations)])
-        p_augmented_text = perturb_texts(args, mask_model, mask_tokenizer, [augmented_text for _ in range(n_perturbations)])
         p_original_text = perturb_texts(args, mask_model, mask_tokenizer, [original_text for _ in range(n_perturbations)])
+        p_sampled_text = perturb_texts(args, mask_model, mask_tokenizer, [sampled_text for _ in range(n_perturbations)])
+        p_augmentor_texts = {
+            augmentor: perturb_texts(args, mask_model, mask_tokenizer, [text for _ in range(n_perturbations)])
+            for augmentor, text in augmentor_texts.items()
+        }
+        
         assert len(p_sampled_text) == n_perturbations, f"Expected {n_perturbations} perturbed samples, got {len(p_sampled_text)}"
-        assert len(p_augmented_text) == n_perturbations, f"Expected {n_perturbations} perturbed samples, got {len(p_augmented_text)}"
         assert len(p_original_text) == n_perturbations, f"Expected {n_perturbations} perturbed samples, got {len(p_original_text)}"
+        for augmentor, perturbed_texts in p_augmentor_texts.items():
+            assert len(perturbed_texts) == n_perturbations, f"Expected {n_perturbations} perturbed samples for augmentor {augmentor}, got {len(perturbed_texts)}"
+
         # result
         perturbs.append({
-            "original": original_text,
-            "sampled": sampled_text,
-            "augmented": augmented_text,  
             "perturbed_original": p_original_text,
             "perturbed_sampled": p_sampled_text,
-            "perturbed_augmented": p_augmented_text
+            **{
+                f"perturbed_augmented_{augmentor}": perturbed_texts
+                for augmentor, perturbed_texts in p_augmentor_texts.items()
+            }
         })
 
-    save_data(f'{args.dataset_file}.{args.mask_filling_model_name}.{name}', args, perturbs)
+    save_perturb_data(f'{args.dataset_file}.{args.mask_filling_model_name}.{name}', perturbs)
 
 
 def experiment(args):
@@ -202,83 +211,118 @@ def experiment(args):
     scoring_model.eval()
     scoring_model.to(args.device)
     # load data
-    data = load_data(f'{args.dataset_file}.{args.mask_filling_model_name}.{name}')
-    n_samples = len(data)
+    data = load_data(f'{args.dataset_file}')
+    n_samples = len(data["sampled"])
+    data_perturbation = load_data(f'{args.dataset_file}.{args.mask_filling_model_name}.{name}')
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
     # Evaluate
-    results = data
+    results = []
+    augmentation_models = EmbeddingAugmentor().MODELS
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
-        original_text = results[idx]["original"]
-        sampled_text = results[idx]["sampled"]
-        augmented_text = results[idx] ["augmented_" + args.augmentor] # Augmented data added here
+        original_text = data["original"][idx]
+        sampled_text = data["sampled"][idx]
+        perturb_entry = data_perturbation[idx]
         
-        perturbed_original = results[idx]["perturbed_original"]
-        perturbed_sampled = results[idx]["perturbed_sampled"]
-        perturbed_augmented = results[idx]["perturbed_augmented"]
+        perturbed_original = perturb_entry["perturbed_original"]
+        perturbed_sampled = perturb_entry["perturbed_sampled"]
+        augmentor_lls = {}
+        augmentor_perturbed_lls = {}
         # original text
         original_ll = get_ll(args, scoring_model, scoring_tokenizer, original_text)
         p_original_ll = get_lls(args, scoring_model, scoring_tokenizer, perturbed_original)
         # sampled text
         sampled_ll = get_ll(args, scoring_model, scoring_tokenizer, sampled_text)
         p_sampled_ll = get_lls(args, scoring_model, scoring_tokenizer, perturbed_sampled)
-        # augmented text
-        augmented_ll = get_ll(args, scoring_model, scoring_tokenizer, augmented_text)
-        p_augmented_ll = get_lls(args, scoring_model, scoring_tokenizer, perturbed_augmented)
-        # result
-        results[idx]["original_ll"] = original_ll
-        results[idx]["sampled_ll"] = sampled_ll
-        results[idx]["augmented_ll"] = augmented_ll
-        results[idx]["all_perturbed_original_ll"] = p_original_ll
-        results[idx]["all_perturbed_sampled_ll"] = p_sampled_ll
-        results[idx]["all_perturbed_augmented_ll"] = p_augmented_ll
-        results[idx]["perturbed_original_ll"] = np.mean(p_original_ll)
-        results[idx]["perturbed_sampled_ll"] = np.mean(p_sampled_ll)
-        results[idx]["perturbed_augmented_ll"] = np.mean(p_augmented_ll)
-        results[idx]["perturbed_original_ll_std"] = np.std(p_original_ll) if len(p_original_ll) > 1 else 1
-        results[idx]["perturbed_sampled_ll_std"] = np.std(p_sampled_ll) if len(p_sampled_ll) > 1 else 1
-        results[idx]["perturbed_augmented_ll_std"] = np.std(p_augmented_ll) if len(p_augmented_ll) > 1 else 1
+        
+        # Create a new entry for this index
+        result_entry = {
+            "original_ll": original_ll,
+            "sampled_ll": sampled_ll,
+            "all_perturbed_original_ll": p_original_ll,
+            "all_perturbed_sampled_ll": p_sampled_ll,
+            "perturbed_original_ll": np.mean(p_original_ll),
+            "perturbed_sampled_ll": np.mean(p_sampled_ll),
+            "perturbed_original_ll_std": np.std(p_original_ll) if len(p_original_ll) > 1 else 1,
+            "perturbed_sampled_ll_std": np.std(p_sampled_ll) if len(p_sampled_ll) > 1 else 1,
+            "augmentor_lls": {},
+            "augmentor_perturbed_lls": {}
+        }
+
+        # Iterate over augmentors
+        for augmentor in augmentation_models:
+            augmented_text = data["augmented_" + augmentor][idx]
+            perturbed_augmented = perturb_entry["perturbed_augmented_" + augmentor]
+
+            augmented_ll = get_ll(args, scoring_model, scoring_tokenizer, augmented_text)
+            p_augmented_ll = get_lls(args, scoring_model, scoring_tokenizer, perturbed_augmented)
+
+            result_entry["augmentor_lls"][augmentor] = augmented_ll
+            result_entry["augmentor_perturbed_lls"][augmentor] = {
+                "mean": np.mean(p_augmented_ll),
+                "std": np.std(p_augmented_ll) if len(p_augmented_ll) > 1 else 1,
+                "all": p_augmented_ll
+            }
+        
+        results.append(result_entry)
 
     # compute diffs with perturbed
-    predictions = {'real': [], 'samples': [], 'augmented': []}
+    predictions = {'real': [], 'samples': [], 'augmentors': {augmentor: [] for augmentor in augmentation_models}}
     for res in results:
         if res['perturbed_original_ll_std'] == 0:
             res['perturbed_original_ll_std'] = 1
             print("WARNING: std of perturbed original is 0, setting to 1")
-            print(f"Number of unique perturbed original texts: {len(set(res['perturbed_original']))}")
-            print(f"Original text: {res['original']}")
+            # print(f"Number of unique perturbed original texts: {len(set(res['perturbed_original']))}")
+            # print(f"Original text: {res['original']}")
         if res['perturbed_sampled_ll_std'] == 0:
             res['perturbed_sampled_ll_std'] = 1
             print("WARNING: std of perturbed sampled is 0, setting to 1")
-            print(f"Number of unique perturbed sampled texts: {len(set(res['perturbed_sampled']))}")
-            print(f"Sampled text: {res['sampled']}")
-        if res['perturbed_augmented_ll_std'] == 0:
-            res['perturbed_augmented_ll_std'] = 1
-            print("WARNING: std of perturbed augmented is 0, setting to 1")
-            print(f"Number of unique perturbed augmented texts: {len(set(res['perturbed_augmented']))}")
-            print(f"Augmented text: {res['augmented']}")
+            # print(f"Number of unique perturbed sampled texts: {len(set(res['perturbed_sampled']))}")
+            # print(f"Sampled text: {res['sampled']}")
 
         predictions['real'].append((res['original_ll'] - res['perturbed_original_ll']) / res['perturbed_original_ll_std'])
         predictions['samples'].append((res['sampled_ll'] - res['perturbed_sampled_ll']) / res['perturbed_sampled_ll_std'])
-        predictions['augmented'].append((res['augmented_ll'] - res['perturbed_augmented_ll']) / res['perturbed_augmented_ll_std'])
+
+        for augmentor in augmentation_models:
+            perturbed_augmented_std = res['augmentor_perturbed_lls'][augmentor]['std']
+            if perturbed_augmented_std == 0:
+                perturbed_augmented_std = 1
+                print(f"WARNING: std of perturbed augmented for {augmentor} is 0, setting to 1")
+            predictions['augmentors'][augmentor].append(
+                (res['augmentor_lls'][augmentor] - res['augmentor_perturbed_lls'][augmentor]['mean']) / perturbed_augmented_std
+            )
 
     print(f"Real mean/std: {np.mean(predictions['real']):.2f}/{np.std(predictions['real']):.2f}, "
-        f"Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}, "
-        f"Augmented mean/std: {np.mean(predictions['augmented']):.2f}/{np.std(predictions['augmented']):.2f}")
+        f"Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}")
+
+    for augmentor in augmentation_models:
+        print(f"Augmentor {augmentor} mean/std: {np.mean(predictions['augmentors'][augmentor]):.2f}/{np.std(predictions['augmentors'][augmentor]):.2f}")
 
     fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
     p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
 
-    fpr2, tpr2, roc_auc2 = get_roc_metrics(predictions['real'], predictions['augmented'])
-    p2, r2, pr_auc2 = get_precision_recall_metrics(predictions['real'], predictions['augmented'])
+    augmentor_metrics = {}
+    for augmentor in augmentation_models:
+        fpr_aug, tpr_aug, roc_auc_aug = get_roc_metrics(predictions['real'], predictions['augmentors'][augmentor])
+        p_aug, r_aug, pr_auc_aug = get_precision_recall_metrics(predictions['real'], predictions['augmentors'][augmentor])
+        augmentor_metrics[augmentor] = {
+            'roc_auc': roc_auc_aug, 
+            'fpr': fpr_aug, 
+            'tpr': tpr_aug,
+            'pr_auc': pr_auc_aug, 
+            'precision': p_aug, 
+            'recall': r_aug,
+            'loss': 1 - pr_auc_aug
+        }
 
     print(f"Criterion {name}_threshold ROC AUC: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
-    print(f"Criterion {name}_threshold ROC AUC augmented: {roc_auc2:.4f}, PR AUC: {pr_auc2:.4f}")
+    for augmentor, metrics in augmentor_metrics.items():
+        print(f"Augmentor {augmentor} ROC AUC: {metrics['roc_auc']:.4f}, PR AUC: {metrics['pr_auc']:.4f}")
 
     # results
-    results_file = f'{args.output_file}.{name}.json'
+    results_file = f'{args.output_file}.detect_gpt.{name}.json'
     results = {
         'name': name,
         'info': {
@@ -300,34 +344,24 @@ def experiment(args):
             'recall': r,
         },
         'loss': 1 - pr_auc,
-        'metrics augmented': {
-            'roc_auc2': roc_auc2, 
-            'fpr2': fpr2, 
-            'tpr2': tpr2
-        },
-        'pr_metrics augmented': {
-            'pr_auc2': pr_auc2, 
-            'precision2': p2, 
-            'recall2': r2
-        },
-        'loss augmented': 1 - pr_auc2
+        'augmentor_metrics': augmentor_metrics
     }
     with open(results_file, 'w') as fout:
-        json.dump(results, fout)
+        json.dump(results, fout, indent=4)
         print(f'Results written into {results_file}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_file', type=str, default="./exp_test/results/xsum_gpt2")
-    parser.add_argument('--dataset', type=str, default="xsum")
-    parser.add_argument('--dataset_file', type=str, default="./exp_test/data/xsum_gpt2")
+    parser.add_argument('--output_file', type=str, default="exp_main/results/white/fast/xsum_gpt2-xl")
+    parser.add_argument('--dataset', type=str, default="xsum") 
+    parser.add_argument('--dataset_file', type=str, default="exp_main/data/xsum_gpt2-xl")
+    parser.add_argument('--scoring_model_name', type=str, default="gpt2-xl")
     parser.add_argument('--pct_words_masked', type=float, default=0.3) # pct masked is actually pct_words_masked * (span_length / (span_length + 2 * buffer_size))
     parser.add_argument('--mask_top_p', type=float, default=1.0)
     parser.add_argument('--span_length', type=int, default=2)
-    parser.add_argument('--n_perturbations', type=int, default=10)
-    parser.add_argument('--scoring_model_name', type=str, default="gpt2")
-    parser.add_argument('--mask_filling_model_name', type=str, default="t5-small")
+    parser.add_argument('--n_perturbations', type=int, default=100)
+    parser.add_argument('--mask_filling_model_name', type=str, default="t5-3b")
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
