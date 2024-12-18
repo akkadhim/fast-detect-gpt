@@ -40,26 +40,26 @@ source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
 echo `date`, Evaluate models in the white-box setting:
 
 # evaluate Fast-DetectGPT and fast baselines
-for D in $datasets; do
-  for M in $source_models; do
-    echo `date`, Evaluating Fast-DetectGPT on ${D}_${M} ...
-    python3 scripts/fast_detect_gpt.py --reference_model_name $M --scoring_model_name $M --dataset $D \
-                          --dataset_file $data_path/${D}_${M} --output_file $res_path/white/fast/${D}_${M}
+# for D in $datasets; do
+#   for M in $source_models; do
+#     echo `date`, Evaluating Fast-DetectGPT on ${D}_${M} ...
+#     python3 scripts/fast_detect_gpt.py --reference_model_name $M --scoring_model_name $M --dataset $D \
+#                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/fast/${D}_${M}
 
-    echo `date`, Evaluating baseline methods on ${D}_${M} ...
-    python3 scripts/baselines.py --scoring_model_name $M --dataset $D \
-                          --dataset_file $data_path/${D}_${M} --output_file $res_path/white/baseline/${D}_${M}
-  done
-done
+#     echo `date`, Evaluating baseline methods on ${D}_${M} ...
+#     python3 scripts/baselines.py --scoring_model_name $M --dataset $D \
+#                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/baseline/${D}_${M}
+#   done
+# done
 
-# evaluate DNA-GPT
-for D in $datasets; do
-  for M in $source_models; do
-    echo `date`, Evaluating DNA-GPT on ${D}_${M} ...
-    python3 scripts/dna_gpt.py --base_model_name $M --dataset $D \
-                          --dataset_file $data_path/${D}_${M} --output_file $res_path/white/dna/${D}_${M}
-  done
-done
+# # evaluate DNA-GPT
+# for D in $datasets; do
+#   for M in $source_models; do
+#     echo `date`, Evaluating DNA-GPT on ${D}_${M} ...
+#     python3 scripts/dna_gpt.py --base_model_name $M --dataset $D \
+#                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/dna/${D}_${M}
+#   done
+# done
 
 # evaluate DetectGPT and its improvement DetectLLM
 for D in $datasets; do
@@ -70,7 +70,7 @@ for D in $datasets; do
      # we leverage DetectGPT to generate the perturbations
     echo `date`, Evaluating DetectLLM methods on ${D}_${M} ...
     python3 scripts/detect_llm.py --scoring_model_name $M --dataset $D \
-                          --dataset_file $data_path/${D}_${M}.t5-3b.perturbation_100 --output_file $res_path/white/detectllm/${D}_${M}
+                          --dataset_file $data_path/${D}_${M} --output_file $res_path/white/detectllm/${D}_${M}
   done
 done
 
