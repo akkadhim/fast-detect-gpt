@@ -1,8 +1,9 @@
 TM_AdversarialAttack.egg-info/
-IMDbKnowledge/
+knowledge_files/
 build/
 exp_main/
 */__pycache__/
 IMDB/
 attack_result.zip
 exp_main/
+result.tar.gz
