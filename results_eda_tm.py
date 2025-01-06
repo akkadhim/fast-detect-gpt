@@ -5,13 +5,12 @@ import csv
 current_file_path = os.path.abspath(__file__)
 current_directory = os.path.dirname(current_file_path)
 exp_path = os.path.join(current_directory, "exp_main")
-res_path = os.path.join(exp_path, "results")
-output_csv = os.path.join(current_directory,"exp_main", "comparison_results.csv")
+res_path = os.path.join(exp_path, "eda_tm_results")
+output_csv = os.path.join(current_directory, "exp_main", "comparison_eda_tm_results.csv")
 
 # Define categories to compare
-datasets = ["writing", "xsum", "squad"]
+datasets = ["xsum", "squad"]
 source_models = ["gpt2-xl", "opt-2.7b", "gpt-neo-2.7B", "gpt-j-6B", "gpt-neox-20b"]
-embedding_sources = ["glove", "fasttext", "word2vec", "tmae", "elmo", "bert"]
 detect_methods = {
     "fast_detect": ['sampling_discrepancy'],
     "baseline": ['likelihood','rank','logrank','entropy'],
@@ -37,7 +36,7 @@ for env in ["white", "black"]:
                         if not os.path.exists(method_path):
                             continue
                         for file in os.listdir(method_path):
-                            if file.startswith(f"{dataset}_{model}.{method}") and (metric == '' or file.endswith(f"{metric}.json")):
+                            if file.startswith(f"{dataset}_{model}") and (metric == '' or file.endswith(f"{metric}.json")):
                                 filepath = os.path.join(method_path, file)
                                 with open(filepath, 'r') as f:
                                     data = json.load(f)
@@ -52,24 +51,15 @@ for env in ["white", "black"]:
                                     "org_roc_auc": data["metrics"].get("roc_auc", None),
                                     "org_pr_auc": data["pr_metrics"].get("pr_auc", None),
                                     "org_loss": data.get("loss", None),
+                                    "aug_roc_auc": data["metrics augmented"].get("roc_auc2", None),
+                                    "aug_pr_auc": data["pr_metrics augmented"].get("pr_auc2", None),
+                                    "aug_loss": data.get("loss augmented", None),
                                 }
-
-                                if "augmentor_metrics" in data:
-                                    for augmentor, augmentor_data in data["augmentor_metrics"].items():
-                                        # Only extract relevant augmentor metrics (roc_auc, pr_auc, loss)
-                                        augmentor_metrics = {
-                                            "augmentor": augmentor,
-                                            "roc_auc": augmentor_data.get("roc_auc", None),
-                                            "pr_auc": augmentor_data.get("pr_auc", None),
-                                            "loss": augmentor_data.get("loss", None),
-                                        }
-                                        results.append({**base_metrics, **augmentor_metrics})
-                                else:
-                                    print(f"No augmentor metrics found in {file}")
+                                results.append(base_metrics)
 
 # Write results to CSV
 with open(output_csv, mode='w', newline='', encoding='utf-8') as csv_file:
-    fieldnames = ["env", "dataset", "model", "method", "metric", "org_roc_auc", "org_pr_auc", "org_loss", "augmentor", "roc_auc", "pr_auc", "loss"]
+    fieldnames = ["env", "dataset", "model", "method", "metric", "org_roc_auc", "org_pr_auc", "org_loss", "aug_roc_auc", "aug_pr_auc", "aug_loss"]
     writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
     writer.writeheader()
     for result in results:
