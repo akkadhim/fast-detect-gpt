@@ -230,31 +230,6 @@ class EmbeddingAugmentor:
             return sorted_similarities[dynamic_index][0]
         else:
             return None
-    
-    # def bert_knowledge_replacement(self, word):       
-    #     # Identify the target word's position
-    #     try:
-    #         target_idx = self.bert_doc_tokens.index(word)
-    #     except ValueError:
-    #         return None
-        
-    #     target_embedding = self.bert_doc_embeddings[target_idx].numpy()
-    #     # Compute similarity with all words in the vocabulary
-    #     similar_words = {}
-    #     for other_word in self.bert_doc_vocabulary:
-    #         if word != other_word:
-    #             word_inputs = self.bert_tokenizer(other_word, return_tensors="pt")
-    #             with torch.no_grad():
-    #                 word_embedding = self.bert_model(**word_inputs).last_hidden_state.mean(dim=1).squeeze(0).numpy()
-    #             similarity = self.cosine_similarity(target_embedding, word_embedding)
-    #             similar_words[other_word] = similarity
-        
-    #     sorted_similarities = sorted(similar_words.items(), key=lambda item: item[1], reverse=False)
-    #     dynamic_index = self.get_dynamic_index(sorted_similarities)
-    #     if 0 <= dynamic_index < len(sorted_similarities):
-    #         return sorted_similarities[dynamic_index][0] 
-    #     else:
-    #         return None
 
     
     def knowledge_replacement_embeddings(self, word):
