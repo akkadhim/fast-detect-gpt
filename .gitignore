@@ -1,5 +1,4 @@
 TM_AdversarialAttack.egg-info/
-knowledge_files/
 build/
 exp_main/
 */__pycache__/
@@ -9,3 +8,5 @@ result.tar.gz
 comparison_results.csv
 result.ipynb
 result_eda_tm.ipynb
+embedding_files/
+.devcontainer/
