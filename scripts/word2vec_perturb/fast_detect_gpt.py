@@ -3,17 +3,26 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import random
+import sys
+import os
+
+# Add parent directory to sys.path
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, parent_dir)
+
+# Import model from the parent directory
+from model import load_tokenizer, load_model
+from metrics import get_roc_metrics, get_precision_recall_metrics
+
+# Restore the original sys.path to avoid affecting other imports
+sys.path.pop(0)
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import tqdm
 import argparse
 import json
 from data_builder import load_data
-from model import load_tokenizer, load_model
-from metrics import get_roc_metrics, get_precision_recall_metrics
-from embedding_augmentor import EmbeddingAugmentor
 
 def get_samples(logits, labels):
     assert logits.shape[0] == 1
@@ -135,7 +144,7 @@ def experiment(args):
         
         # ----- Augmented text -----
         for model_name in augmentation_models:
-            augmented_text = data[f"augmented_{model_name}"][idx]
+            augmented_text = data[f"perturb_{model_name}"][idx]
             tokenized = scoring_tokenizer(augmented_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
             labels = tokenized.input_ids[:, 1:]
 
@@ -209,7 +218,7 @@ def experiment(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_file', type=str, default="exp_main/results/white/fast/xsum_gpt2-xl")
+    parser.add_argument('--output_file', type=str, default="exp_main/results/white/fast_detect/xsum_gpt2-xl")
     parser.add_argument('--dataset', type=str, default="xsum") 
     parser.add_argument('--dataset_file', type=str, default="exp_main/data/xsum_gpt2-xl")
     parser.add_argument('--reference_model_name', type=str, default="gpt2-xl")

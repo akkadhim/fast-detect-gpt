@@ -209,7 +209,7 @@ def experiment(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_file', type=str, default="exp_main/results/white/fast/xsum_gpt2-xl")
+    parser.add_argument('--output_file', type=str, default="exp_main/results/white/fast_detect/xsum_gpt2-xl")
     parser.add_argument('--dataset', type=str, default="xsum") 
     parser.add_argument('--dataset_file', type=str, default="exp_main/data/xsum_gpt2-xl")
     parser.add_argument('--reference_model_name', type=str, default="gpt2-xl")
