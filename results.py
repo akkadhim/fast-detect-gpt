@@ -31,14 +31,15 @@ for env in ["white", "black"]:
             for method, metrics in detect_methods.items():
                 if metrics:
                     for metric in metrics:
-                        # print(f"Collecting results for {dataset}_{model}.{method}.{metric}.json")
                         counter += 1
                         method_path = os.path.join(res_path, env, method)
                         if not os.path.exists(method_path):
+                            print(f"Method path {method_path.replace(exp_path, '')} does not exist. Skipping...")
                             continue
                         for file in os.listdir(method_path):
-                            if file.startswith(f"{dataset}_{model}.{method}") and (metric == '' or file.endswith(f"{metric}.json")):
+                            if file.startswith(f"{dataset}_{model}") and (metric == '' or file.endswith(f".{metric}.json")):
                                 filepath = os.path.join(method_path, file)
+                                # print(f"Collecting results for {filepath.replace(exp_path, '')}...")
                                 with open(filepath, 'r') as f:
                                     data = json.load(f)
 
@@ -48,7 +49,7 @@ for env in ["white", "black"]:
                                     "dataset": dataset,
                                     "model": model,
                                     "method": method,
-                                    "metric": metric,
+                                    "metric": metric if metric else "none",
                                     "org_roc_auc": data["metrics"].get("roc_auc", None),
                                     "org_pr_auc": data["pr_metrics"].get("pr_auc", None),
                                     "org_loss": data.get("loss", None),
