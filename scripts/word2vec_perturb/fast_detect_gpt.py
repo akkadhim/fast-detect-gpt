@@ -145,8 +145,12 @@ def experiment(args):
         # ----- Augmented text -----
         for exp_name in experiments:
             experiment_set = data[exp_name]
+            if exp_name not in augmentor_criteria:
+                augmentor_criteria[exp_name] = {}
+                
             for experiment in experiment_set:
-                perturbed_text = data[experiment][idx]
+        
+                perturbed_text = data[exp_name][experiment][idx]
                 tokenized = scoring_tokenizer(perturbed_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
                 labels = tokenized.input_ids[:, 1:]
 
