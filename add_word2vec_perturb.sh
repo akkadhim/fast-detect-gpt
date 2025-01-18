@@ -10,7 +10,7 @@ set -e  # exit if error
 
 # prepare folders
 exp_path=exp_main
-data_path=$exp_path/data
+data_path=$exp_path/data/word2vec_perturb
 res_path=$exp_path/results/word2vec_perturb
 mkdir -p $exp_path $data_path $res_path
 
@@ -18,7 +18,7 @@ datasets="writing xsum squad"
 source_models="gpt2-xl opt-2.7b gpt-neo-2.7B gpt-j-6B gpt-neox-20b"
 
 
-# # augmenting dataset
+# augmenting dataset
 # for D in $datasets; do
 #   for M in $source_models; do
 #     echo `date`, Preparing dataset ${D}_${M} ...
@@ -36,8 +36,8 @@ for D in $datasets; do
     python3 scripts/word2vec_perturb/fast_detect_gpt.py --reference_model_name $M --scoring_model_name $M --dataset $D \
                           --dataset_file $data_path/${D}_${M} --output_file $res_path/white/fast_detect/${D}_${M}
 
-    echo `date`, Evaluating baseline methods on ${D}_${M} ...
-    python3 scripts/word2vec_perturb/baselines.py --scoring_model_name $M --dataset $D \
-                          --dataset_file $data_path/${D}_${M} --output_file $res_path/white/baseline/${D}_${M}
+    # echo `date`, Evaluating baseline methods on ${D}_${M} ...
+    # python3 scripts/word2vec_perturb/baselines.py --scoring_model_name $M --dataset $D \
+    #                       --dataset_file $data_path/${D}_${M} --output_file $res_path/white/baseline/${D}_${M}
   done
 done

@@ -1,5 +1,5 @@
 .devcontainer/
-*/__pycache__/
+*/__pycache__/*
 TM_AdversarialAttack.egg-info/
 build/
 exp_main/

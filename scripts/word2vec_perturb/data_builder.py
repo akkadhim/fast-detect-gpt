@@ -12,8 +12,15 @@ from tqdm import tqdm
 import nltk
 from nltk.corpus import wordnet as wn
 from gensim.models import Word2Vec
+import sys
 
-def append_change_to_file(output_file, data):
+# Add parent directory to sys.path
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, parent_dir)
+import text_organizer
+sys.path.pop(0)
+
+def append_change_to_file(output_file, data,data_name):
     data_file = f"{output_file}.raw_data.json"
     # load existing data from the file
     if os.path.exists(data_file):
@@ -22,7 +29,6 @@ def append_change_to_file(output_file, data):
     else:
         raise FileNotFoundError(f"Data file {data_file} does not exist.")
     # append augmented data
-    data_name = "perturb_word2vec"
     if data_name in existing_data:
         print("Augmented data already exists. It will be overwritten.")
     existing_data[data_name] = data
@@ -75,7 +81,7 @@ class DataBuilder:
             return texta, textb, textc
         return texta, textb
 
-    def _synonum_replace(self, doc, percentage):
+    def _synonum_replace(self, doc, percentage, similarity_threshold):
         aug_text = '' 
         sentences = doc.split('. ')
         for sentence in sentences:
@@ -101,8 +107,22 @@ class DataBuilder:
                 synonyms = get_synonyms(random_word)
                 if synonyms:
                     similarities = calculate_similarity(random_word, synonyms, self.word2vec)
+                    
                     if similarities:
-                        synonym = min(similarities, key=similarities.get)
+                        sorted_similarities = sorted(similarities.items(), key=lambda item: item[1])
+                        if similarity_threshold == 'min':
+                            # Select the synonym with the lowest similarity score
+                            synonym = sorted_similarities[0][0]
+                        elif similarity_threshold == 'mid':
+                            # Select the synonym with the mid similarity score
+                            mid_index = len(sorted_similarities) // 2
+                            synonym = sorted_similarities[mid_index][0]
+                        elif similarity_threshold == 'high':
+                            # Select the synonym with the highest similarity score
+                            synonym = sorted_similarities[-1][0]
+                        else:
+                            raise ValueError("Invalid level. Choose from 'min', 'mid', 'high'.")
+                        
                         if synonym:
                             # Replace only the matching words, preserving the original format
                             new_sentence = [
@@ -117,10 +137,10 @@ class DataBuilder:
             aug_text = aug_text + ' '.join(new_sentence) + '. '
         return aug_text
     
-    def _sample_from_word2vec(self, texts):
+    def _sample_from_word2vec(self, texts, perturbing_percnt, similarity_threshold):
         decoded = []
         for doc in texts:
-            decoded.append(self._synonum_replace(doc,args.perturbing_percnt))
+            decoded.append(self._synonum_replace(doc, perturbing_percnt, similarity_threshold))
         return decoded
 
     def generate_perturbing_samples(self, batch_size):
@@ -133,21 +153,37 @@ class DataBuilder:
         if len(original_data) != len(sampled_data):
             raise ValueError("Mismatch between original and sampled data lengths.")
 
-        augmented_data = []
+        ######################################################
+        # perturbing_percents = [1, 2, 5, 10, 20]
+        perturbing_percents = [5]
+        
+        similarity_thresholds = ['min', 'mid', 'high']
+        # similarity_thresholds = ['mid']
+        
+        # perturb_data = {percent: [] for percent in perturbing_percents}
+        perturb_data = {similarity_threshold: [] for similarity_threshold in similarity_thresholds}
+        ######################################################
+
         for batch in tqdm(range(len(original_data) // batch_size), desc="Processing batches"):
-            # print('Generating augmented samples for batch', batch, 'of', len(original_data) // batch_size)
             original_batch = original_data[batch * batch_size:(batch + 1) * batch_size]
             sampled_batch = sampled_data[batch * batch_size:(batch + 1) * batch_size]
-            augmented_batch = self._sample_from_word2vec(sampled_batch)
-            for o, s, a in zip(original_batch, sampled_batch, augmented_batch):               
-                o, s, a = self._trim_to_shorter_length(o, s, a)
-                augmented_data.append(a)
+            
+            # Generate perturbations for each percentage
+            for similarity_threshold in similarity_thresholds:
+                for percent in perturbing_percents:
+                    perturb_batch = self._sample_from_word2vec(sampled_batch, percent, similarity_threshold)
+                    for o, s, a in zip(original_batch, sampled_batch, perturb_batch):               
+                        o, s, a = self._trim_to_shorter_length(o, s, a)
+                        ######################################################
+                        perturb_data[similarity_threshold].append(a)
+                        # perturb_data_by_percent[percent].append(a)
+                        ######################################################
                 
-        return augmented_data
+        return perturb_data
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_file', type=str, default="exp_main/data/writing_gpt2-xl")
+    parser.add_argument('--output_file', type=str, default="exp_main/data/word2vec_perturb/writing_gpt2-xl")
     parser.add_argument('--dataset', type=str, default="writing")
     parser.add_argument('--n_samples', type=int, default=500)
     parser.add_argument('--openai_base', type=str, default=None)
@@ -164,7 +200,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--cache_dir', type=str, default="../cache")
-    parser.add_argument('--perturbing_percnt', type=int, default=5)
+    parser.add_argument('--perturbing_percnt', type=str, default='False')
+    parser.add_argument('--similarity_threshold', type=str, default='True')
     args = parser.parse_args()
 
     os.environ["XDG_CACHE_HOME"] = args.cache_dir
@@ -181,4 +218,7 @@ if __name__ == '__main__':
     print(f'Loading dataset {args.dataset}...')
     data_builder = DataBuilder(args)
     perturbing_data = data_builder.generate_perturbing_samples(batch_size=args.batch_size)
-    append_change_to_file(args.output_file, perturbing_data)
+    if args.perturbing_percnt == 'True':
+        append_change_to_file(args.output_file, perturbing_data,data_name="perturb_word2vec_percent")
+    if args.similarity_threshold == 'True':
+        append_change_to_file(args.output_file, perturbing_data,data_name="perturb_word2vec_threshold")

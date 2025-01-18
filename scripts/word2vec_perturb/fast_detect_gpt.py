@@ -107,7 +107,7 @@ def experiment(args):
     np.random.seed(args.seed)
     
     results = []
-    augmentation_models = ["word2vec"]
+    experiments = ["perturb_word2vec_percent","perturb_word2vec_threshold"]
     
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = data["original"][idx]
@@ -143,20 +143,22 @@ def experiment(args):
             sampled_crit = criterion_fn(logits_ref, logits_score, labels)
         
         # ----- Augmented text -----
-        for model_name in augmentation_models:
-            augmented_text = data[f"perturb_{model_name}"][idx]
-            tokenized = scoring_tokenizer(augmented_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
-            labels = tokenized.input_ids[:, 1:]
+        for exp_name in experiments:
+            experiment_set = data[exp_name]
+            for experiment in experiment_set:
+                perturbed_text = data[experiment][idx]
+                tokenized = scoring_tokenizer(perturbed_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
+                labels = tokenized.input_ids[:, 1:]
 
-            with torch.no_grad():
-                logits_score = scoring_model(**tokenized).logits[:, :-1]
-                if args.reference_model_name == args.scoring_model_name:
-                    logits_ref = logits_score
-                else:
-                    tokenized = reference_tokenizer(augmented_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
-                    assert torch.all(tokenized.input_ids[:, 1:] == labels), "Tokenizer mismatch."
-                    logits_ref = reference_model(**tokenized).logits[:, :-1]
-                augmentor_criteria[model_name] = criterion_fn(logits_ref, logits_score, labels)
+                with torch.no_grad():
+                    logits_score = scoring_model(**tokenized).logits[:, :-1]
+                    if args.reference_model_name == args.scoring_model_name:
+                        logits_ref = logits_score
+                    else:
+                        tokenized = reference_tokenizer(perturbed_text, return_tensors="pt", padding=True, return_token_type_ids=False).to(args.device)
+                        assert torch.all(tokenized.input_ids[:, 1:] == labels), "Tokenizer mismatch."
+                        logits_ref = reference_model(**tokenized).logits[:, :-1]
+                    augmentor_criteria[exp_name][experiment] = criterion_fn(logits_ref, logits_score, labels)
 
         # Append results
         results.append({
@@ -165,41 +167,54 @@ def experiment(args):
             "augmentors": augmentor_criteria
         })
         
+    
+    # perturbing_percents = [1, 2, 5, 10, 20]
+    # similarity_thresholds = ['min', 'mid', 'high']
     # Compute prediction scores for real/sampled/augmented passages
     predictions = {
         'real': [x["original_crit"] for x in results],
         'samples': [x["sampled_crit"] for x in results],
-        'augmentors': {model: [x["augmentors"][model] for x in results] for model in augmentation_models}
+        'augmentors': {exp_name: {
+            experiment: [x["augmentors"][exp_name][experiment] for x in results]
+            for experiment in data[exp_name]
+        } for exp_name in experiments}
     }
 
     print(f"Real mean/std: {np.mean(predictions['real']):.2f}/{np.std(predictions['real']):.2f}, "
           f"Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}")
 
-    for model in augmentation_models:
-        print(f"{model} mean/std: {np.mean(predictions['augmentors'][model]):.2f}/{np.std(predictions['augmentors'][model]):.2f}")
+    for exp_name in experiments:
+        for experiment in data[exp_name]:
+            scores = predictions['augmentors'][exp_name][experiment]
+            print(f"{exp_name} ({experiment}) mean/std: {np.mean(scores):.2f}/{np.std(scores):.2f}")
 
+    # Compute metrics
     fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
     p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
 
     augmentor_metrics = {}
-    for model in augmentation_models:
-        fpr_model, tpr_model, roc_auc_model = get_roc_metrics(predictions['real'], predictions['augmentors'][model])
-        p_model, r_model, pr_auc_model = get_precision_recall_metrics(predictions['real'], predictions['augmentors'][model])
-        augmentor_metrics[model] = {
-            'roc_auc': roc_auc_model,
-            'fpr': fpr_model,
-            'tpr': tpr_model,
-            'pr_auc': pr_auc_model,
-            'precision': p_model,
-            'recall': r_model,
-            'loss': 1 - pr_auc_model
-        }
+    for exp_name in experiments:
+        augmentor_metrics[exp_name] = {}
+        for experiment in data[exp_name]:
+            scores = predictions['augmentors'][exp_name][experiment]
+            fpr_model, tpr_model, roc_auc_model = get_roc_metrics(predictions['real'], scores)
+            p_model, r_model, pr_auc_model = get_precision_recall_metrics(predictions['real'], scores)
+            augmentor_metrics[exp_name][experiment] = {
+                'roc_auc': roc_auc_model,
+                'fpr': fpr_model,
+                'tpr': tpr_model,
+                'pr_auc': pr_auc_model,
+                'precision': p_model,
+                'recall': r_model,
+                'loss': 1 - pr_auc_model
+            }
 
     print(f"Criterion {name}_threshold ROC AUC sampled: {roc_auc:.4f}, PR AUC: {pr_auc:.4f}")
-    for model, metrics in augmentor_metrics.items():
-        print(f"Criterion {name}_threshold ROC AUC {model}: {metrics['roc_auc']:.4f}, PR AUC: {metrics['pr_auc']:.4f}")
+    for exp_name, experiments in augmentor_metrics.items():
+        for experiment, metrics in experiments.items():
+            print(f"Criterion {name}_threshold ROC AUC {exp_name} ({experiment}): {metrics['roc_auc']:.4f}, PR AUC: {metrics['pr_auc']:.4f}")
 
-    # Results
+    # Save results
     results_file = f'{args.output_file}.fast_detect.{name}.json'
     results_data = {
         'name': f'{name}_threshold',
@@ -218,9 +233,9 @@ def experiment(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_file', type=str, default="exp_main/results/white/fast_detect/xsum_gpt2-xl")
+    parser.add_argument('--output_file', type=str, default="exp_main/results/word2vec_perturb/white/fast_detect/xsum_gpt2-xl")
     parser.add_argument('--dataset', type=str, default="xsum") 
-    parser.add_argument('--dataset_file', type=str, default="exp_main/data/xsum_gpt2-xl")
+    parser.add_argument('--dataset_file', type=str, default="exp_main/data/word2vec_perturb/xsum_gpt2-xl")
     parser.add_argument('--reference_model_name', type=str, default="gpt2-xl")
     parser.add_argument('--scoring_model_name', type=str, default="gpt2-xl")
     parser.add_argument('--discrepancy_analytic', action='store_true')
