@@ -8,3 +8,4 @@ comparison_results.csv
 result.ipynb
 result_eda_tm.ipynb
 embedding_files/
+result_word2vec.ipynb

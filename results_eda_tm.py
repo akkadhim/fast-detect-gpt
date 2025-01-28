@@ -5,8 +5,8 @@ import csv
 current_file_path = os.path.abspath(__file__)
 current_directory = os.path.dirname(current_file_path)
 exp_path = os.path.join(current_directory, "exp_main")
-res_path = os.path.join(exp_path, "eda_tm_results")
-output_csv = os.path.join(current_directory, "exp_main", "comparison_eda_tm_results.csv")
+res_path = os.path.join(exp_path, "results\\tm")
+output_csv = os.path.join(current_directory, "exp_main\\results\\tm", "eda_tm_results.csv")
 
 # Define categories to compare
 datasets = ["xsum", "squad"]
@@ -36,7 +36,7 @@ for env in ["white", "black"]:
                         if not os.path.exists(method_path):
                             continue
                         for file in os.listdir(method_path):
-                            if file.startswith(f"{dataset}_{model}") and (metric == '' or file.endswith(f"{metric}.json")):
+                            if file.startswith(f"{dataset}_{model}") and (metric == '' or file.endswith(f".{metric}.json")):
                                 filepath = os.path.join(method_path, file)
                                 with open(filepath, 'r') as f:
                                     data = json.load(f)
@@ -47,7 +47,7 @@ for env in ["white", "black"]:
                                     "dataset": dataset,
                                     "model": model,
                                     "method": method,
-                                    "metric": metric,
+                                    "metric": metric if metric else "none",
                                     "org_roc_auc": data["metrics"].get("roc_auc", None),
                                     "org_pr_auc": data["pr_metrics"].get("pr_auc", None),
                                     "org_loss": data.get("loss", None),
