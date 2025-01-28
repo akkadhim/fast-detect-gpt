@@ -10,8 +10,8 @@ import random
 import argparse
 import os
 import json
-import custom_datasets
-from model import load_tokenizer, load_model
+import scripts.shared.custom_datasets as custom_datasets
+from scripts.shared.model import load_tokenizer, load_model
 from eda import *
 from tqdm import tqdm
 from scripts.embedding import Embedding

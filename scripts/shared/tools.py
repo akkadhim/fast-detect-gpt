@@ -3,7 +3,7 @@ import pickle
 import numpy as np
 from functools import lru_cache
 import codecs
-from directories import dicrectories
+from scripts.shared.directories import dicrectories
 
 class tools:      
     @staticmethod    

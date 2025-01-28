@@ -11,8 +11,8 @@ import tqdm
 import argparse
 import json
 from data_builder import load_data
-from model import load_tokenizer, load_model
-from metrics import get_roc_metrics, get_precision_recall_metrics
+from scripts.shared.model import load_tokenizer, load_model
+from scripts.shared.metrics import get_roc_metrics, get_precision_recall_metrics
 from scripts.embedding import Embedding
 
 def get_samples(logits, labels):

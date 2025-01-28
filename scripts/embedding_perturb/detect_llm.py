@@ -9,8 +9,8 @@ import torch.nn.functional as F
 import tqdm
 import argparse
 import json
-from model import load_tokenizer, load_model
-from metrics import get_roc_metrics, get_precision_recall_metrics
+from scripts.shared.model import load_tokenizer, load_model
+from scripts.shared.metrics import get_roc_metrics, get_precision_recall_metrics
 from data_builder import load_data
 from scripts.embedding import Embedding
 
