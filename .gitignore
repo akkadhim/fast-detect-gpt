@@ -3,3 +3,4 @@
 build/
 exp_main/
 embedding_files/
+calc_results/*.ipynb
