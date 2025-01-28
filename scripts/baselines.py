@@ -12,7 +12,7 @@ import json
 from data_builder import load_data
 from model import load_tokenizer, load_model
 from metrics import get_roc_metrics, get_precision_recall_metrics
-from embedding_augmentor import EmbeddingAugmentor
+from scripts.embedding import Embedding
 
 def get_likelihood(logits, labels):
     assert logits.shape[0] == 1
@@ -79,7 +79,7 @@ def experiment(args):
                      'rank': get_rank,
                      'logrank': get_logrank,
                      'entropy': get_entropy}
-    augmentation_models = EmbeddingAugmentor().MODELS
+    augmentation_models = Embedding().MODELS
     for name in criterion_fns:
         criterion_fn = criterion_fns[name]
         torch.manual_seed(args.seed)

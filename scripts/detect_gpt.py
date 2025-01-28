@@ -14,7 +14,7 @@ import json
 from data_builder import load_data, save_perturb_data
 from metrics import get_roc_metrics, get_precision_recall_metrics
 from model import load_tokenizer, load_model, get_model_fullname, from_pretrained
-from embedding_augmentor import EmbeddingAugmentor
+from scripts.embedding import Embedding
 
 # define regex to match all <extra_id_*> tokens, where * is an integer
 pattern = re.compile(r"<extra_id_\d+>")
@@ -164,7 +164,7 @@ def generate_perturbs(args):
     np.random.seed(args.seed)
 
     # generate perturb samples
-    augmentation_models = EmbeddingAugmentor().MODELS
+    augmentation_models = Embedding().MODELS
     perturbs = []
     for idx in tqdm.tqdm(range(n_samples), desc=f"Perturb text"):
         original_text = data["original"][idx]
@@ -220,7 +220,7 @@ def experiment(args):
 
     # Evaluate
     results = []
-    augmentation_models = EmbeddingAugmentor().MODELS
+    augmentation_models = Embedding().MODELS
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = data["original"][idx]
         sampled_text = data["sampled"][idx]

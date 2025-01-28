@@ -18,7 +18,7 @@ from data_builder import load_data
 from model import load_tokenizer, load_model
 from metrics import get_roc_metrics, get_precision_recall_metrics
 import custom_datasets
-from embedding_augmentor import EmbeddingAugmentor
+from scripts.embedding import Embedding
 
 class PrefixSampler:
     def __init__(self, args):
@@ -158,7 +158,7 @@ def experiment(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     results = []
-    augmentation_models = EmbeddingAugmentor().MODELS
+    augmentation_models = Embedding().MODELS
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = data["original"][idx]
         sampled_text = data["sampled"][idx]

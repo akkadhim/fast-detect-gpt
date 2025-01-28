@@ -14,7 +14,7 @@ import custom_datasets
 from model import load_tokenizer, load_model
 from eda import *
 from tqdm import tqdm
-from embedding_augmentor import EmbeddingAugmentor
+from scripts.embedding import Embedding
 
 def preprocess_text(text):
     return text
@@ -192,10 +192,10 @@ class DataBuilder:
     
     def _sample_from_augmentor(self, texts):
         decoded = []
-        augmentor = EmbeddingAugmentor(args.augmentor)
+        augmentor = Embedding(args.augmentor)
         if(args.augmentor in augmentor.MODELS):
             for doc in texts:
-                decoded.append(augmentor.do(doc,args.augment_percnt))
+                decoded.append(augmentor.document_perturb(doc,args.augment_percnt))
         else:
             alpha_sr = 0
             alpha_ri = 0

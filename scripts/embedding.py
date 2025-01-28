@@ -13,7 +13,7 @@ import nltk
 nltk.download('punkt')
 nltk.download('punkt_tab')
  
-class EmbeddingAugmentor:
+class Embedding:
     MODELS = ['glove', 'fasttext', 'word2vec', 'tmae', 'elmo', 'bert']
     SIMILAR_SIZE = 400
     SIMILAR_INDEX = 5
@@ -33,7 +33,7 @@ class EmbeddingAugmentor:
         elif model_name == "fasttext":
             self.load_fasttext_model('IMDB/fasttext_model.bin')
         elif model_name == "word2vec":
-            self.load_word2vec_model('IMDB/custom_word2vec.model')
+            self.load_word2vec_model('embedding_files/datasets/word2vec_1billion/custom_word2vec.model')
         elif model_name == "elmo":
             self.load_elmo_model("https://tfhub.dev/google/elmo/3")
         elif model_name == "bert":
@@ -64,7 +64,7 @@ class EmbeddingAugmentor:
                 embeddings_index[word] = coefs
         self.models["glove"] = embeddings_index
     
-    def glove_knowledge_replacement(self, word):
+    def glove_word_replacement(self, word):
         glove_vectors = self.models["glove"]
         if word not in glove_vectors:
             return []
@@ -89,7 +89,7 @@ class EmbeddingAugmentor:
     def load_fasttext_model(self, fasttext_path):
         self.models["fasttext"] = fasttext.load_model(fasttext_path)
     
-    def fasttext_knowledge_replacement(self, word):
+    def fasttext_word_replacement(self, word):
         fasttext_vectors = self.models["fasttext"]
         if word in fasttext_vectors.words:
             similar_words = fasttext_vectors.get_nearest_neighbors(word, k=self.SIMILAR_SIZE)  
@@ -102,7 +102,7 @@ class EmbeddingAugmentor:
     def load_word2vec_model(self, word2vec_path):
         self.models["word2vec"] = Word2Vec.load(word2vec_path)
     
-    def word2vec_knowledge_replacement(self, word):
+    def word2vec_word_replacement(self, word):
         word2vec_vectors = self.models["word2vec"]
         if word in word2vec_vectors.wv:
             similar_words = word2vec_vectors.wv.most_similar(word, topn=self.SIMILAR_SIZE)
@@ -124,7 +124,7 @@ class EmbeddingAugmentor:
         self.elmo_doc_tokens = tokens
         self.elmo_doc_embeddings = {token: embeddings[i] for i, token in enumerate(tokens)}
     
-    def elmo_knowledge_replacement(self, word) :
+    def elmo_word_replacement(self, word) :
         if word not in self.elmo_doc_embeddings:
             return None 
         
@@ -149,7 +149,7 @@ class EmbeddingAugmentor:
         self.vectorizer_X = tools.read_pickle_data(path)
         self.knowledge_directory = dicrectories.knowledge
         
-    def tmae_knowledge_replacement(self, word):
+    def tmae_word_replacement(self, word):
         id = self.vectorizer_X.vocabulary_.get(word, None)
         if id is None:
             return None
@@ -192,7 +192,7 @@ class EmbeddingAugmentor:
             outputs = self.bert_model(**inputs)
         self.bert_doc_embeddings = outputs.last_hidden_state[0]  # Shape: (sequence_length, hidden_size)
 
-    def bert_knowledge_replacement(self, word):
+    def bert_word_replacement(self, word):
         try:
             # Identify the target word's position
             target_idx = self.bert_doc_tokens.index(word)
@@ -232,26 +232,27 @@ class EmbeddingAugmentor:
             return None
 
     
-    def knowledge_replacement_embeddings(self, word):
+    # main function
+    def word_replacement(self, word):
         try:
             if self.model_name == "glove":
-                return self.glove_knowledge_replacement(word)
+                return self.glove_word_replacement(word)
             elif self.model_name == "fasttext":
-                return self.fasttext_knowledge_replacement(word)
+                return self.fasttext_word_replacement(word)
             elif self.model_name == "word2vec":
-                return self.word2vec_knowledge_replacement(word)
+                return self.word2vec_word_replacement(word)
             elif self.model_name == "tmae":
-                return self.tmae_knowledge_replacement(word)
+                return self.tmae_word_replacement(word)
             elif self.model_name == "elmo":
-                return self.elmo_knowledge_replacement(word)
+                return self.elmo_word_replacement(word)
             elif self.model_name == "bert":
-                return self.bert_knowledge_replacement(word)
+                return self.bert_word_replacement(word)
             else:
                 raise ValueError(f"Unsupported model: {self.model_name}")
         except KeyError:
             return word
 
-    def do(self, doc, percentage):
+    def document_perturb(self, doc, percentage):
         if (self.model_name == "elmo"):
             self.build_elmo_doc_embeddings(doc)
         elif (self.model_name == "bert"):
@@ -260,7 +261,7 @@ class EmbeddingAugmentor:
         # print("=============================================================================")
         # print(doc)
 
-        aug_text = '' 
+        perturbed_text = '' 
         sentences = doc.split('. ')
         for sentence in sentences:
             original_words = sentence.split()  # Keeps original sentence structure
@@ -282,7 +283,7 @@ class EmbeddingAugmentor:
             # Replace the calculated number of words with their synonyms
             num_replaced = 0
             for random_word in random_word_list:
-                synonym = self.knowledge_replacement_embeddings(random_word)
+                synonym = self.word_replacement(random_word)
                 # print(random_word," ===== will be =====",synonym)
                 if synonym:
                     # Replace only the matching words, preserving the original format
@@ -294,10 +295,10 @@ class EmbeddingAugmentor:
                 if num_replaced >= num_to_replace:  # Stop after replacing the target number of words
                     break
 
-            aug_text = aug_text + ' '.join(new_sentence) + '. '
+            perturbed_text = perturbed_text + ' '.join(new_sentence) + '. '
 
         # print("=============================================================================")
-        # print(aug_text)
-        return aug_text
+        # print(perturbed_text)
+        return perturbed_text
     
     

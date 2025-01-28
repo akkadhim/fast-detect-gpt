@@ -13,7 +13,7 @@ import json
 from data_builder import load_data
 from model import load_tokenizer, load_model
 from metrics import get_roc_metrics, get_precision_recall_metrics
-from embedding_augmentor import EmbeddingAugmentor
+from scripts.embedding import Embedding
 
 def get_samples(logits, labels):
     assert logits.shape[0] == 1
@@ -98,7 +98,7 @@ def experiment(args):
     np.random.seed(args.seed)
     
     results = []
-    augmentation_models = EmbeddingAugmentor().MODELS
+    augmentation_models = Embedding().MODELS
     
     for idx in tqdm.tqdm(range(n_samples), desc=f"Computing {name} criterion"):
         original_text = data["original"][idx]

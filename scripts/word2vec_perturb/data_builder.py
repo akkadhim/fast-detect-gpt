@@ -10,14 +10,14 @@ import os
 import json
 from tqdm import tqdm
 import nltk
-from nltk.corpus import wordnet as wn
-from gensim.models import Word2Vec
 import sys
+from synonum import *
+from scripts.embedding import Embedding
 
 # Add parent directory to sys.path
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, parent_dir)
-import text_organizer
+
 sys.path.pop(0)
 
 def append_change_to_file(output_file, data,data_name):
@@ -44,33 +44,10 @@ def load_data(input_file):
         print(f"Raw data loaded from {data_file}")
     return data
 
-def get_synonyms(word):
-    """Fetch synonyms of the given word using WordNet."""
-    synonyms = set()
-    for synset in wn.synsets(word):
-        for lemma in synset.lemmas():
-            synonyms.add(lemma.name().replace('_', ' '))
-    return synonyms
-
-def calculate_similarity(word, synonyms, model):
-    """Calculate similarity between the word and its synonyms using Word2Vec."""
-    similarities = {}
-    for synonym in synonyms:
-        if synonym in model.wv.key_to_index and word in model.wv.key_to_index:
-            similarity = model.wv.similarity(word, synonym)
-            similarities[synonym] = similarity
-    return similarities
-
 class DataBuilder:
     def __init__(self, args):
         self.args = args
-        model_path = "embedding_files/datasets/word2vec_1billion/custom_word2vec.model"
-        try:
-            self.word2vec = Word2Vec.load(model_path)
-        except Exception as e:
-            print(f"Error loading Word2Vec model: {e}")
-            exit()
-        
+       
     def _trim_to_shorter_length(self, texta, textb, textc = None):
         # truncate to shorter of o and s
         shorter_length = min(len(texta.split(' ')), len(textb.split(' ')), len(textc.split(' ')))
@@ -80,79 +57,25 @@ class DataBuilder:
             textc = ' '.join(textc.split(' ')[:shorter_length])
             return texta, textb, textc
         return texta, textb
-
-    def _synonum_replace(self, doc, percentage, similarity_threshold):
-        aug_text = '' 
-        sentences = doc.split('. ')
-        for sentence in sentences:
-            original_words = sentence.split()  # Keeps original sentence structure
-            new_sentence = original_words.copy()
-
-            # Normalize the sentence for replacement logic
-            normalized_sentence = text_organizer.get_only_chars(sentence)
-            words = normalized_sentence.split()
-            words = [word for word in words if word != '']  # Filter out empty strings
-
-            # Get candidate words for replacement
-            random_word_list = list(set([word for word in words if word.lower() not in text_organizer.stop_words]))
-            random.shuffle(random_word_list)
-
-            # Calculate the number of words to replace based on the percentage
-            total_words = len(random_word_list)
-            num_to_replace = max(1, int((percentage / 100) * total_words))  # At least one word
-
-            # Replace the calculated number of words with their synonyms
-            num_replaced = 0
-            for random_word in random_word_list:
-                synonyms = get_synonyms(random_word)
-                if synonyms:
-                    similarities = calculate_similarity(random_word, synonyms, self.word2vec)
-                    
-                    if similarities:
-                        sorted_similarities = sorted(similarities.items(), key=lambda item: item[1])
-                        if similarity_threshold == 'min':
-                            # Select the synonym with the lowest similarity score
-                            synonym = sorted_similarities[0][0]
-                        elif similarity_threshold == 'mid':
-                            # Select the synonym with the mid similarity score
-                            mid_index = len(sorted_similarities) // 2
-                            synonym = sorted_similarities[mid_index][0]
-                        elif similarity_threshold == 'high':
-                            # Select the synonym with the highest similarity score
-                            synonym = sorted_similarities[-1][0]
-                        else:
-                            raise ValueError("Invalid level. Choose from 'min', 'mid', 'high'.")
-                        
-                        if synonym:
-                            # Replace only the matching words, preserving the original format
-                            new_sentence = [
-                                synonym if word.lower() == random_word else word
-                                for word in new_sentence
-                            ]
-                            num_replaced += 1
-                        # Stop after replacing the target number of words
-                        if num_replaced >= num_to_replace:
-                            break
-
-            aug_text = aug_text + ' '.join(new_sentence) + '. '
-        return aug_text
-    
-    def _sample_from_word2vec(self, texts, perturbing_percnt, similarity_threshold):
+         
+    def _sample_from_embedding(self, texts, embedding_model, perturbing_percnt, similarity_threshold):
         decoded = []
         for doc in texts:
-            decoded.append(self._synonum_replace(doc, perturbing_percnt, similarity_threshold))
+            decoded.append(synonum_by_word2vec(doc, embedding_model, perturbing_percnt, similarity_threshold))
         return decoded
-
+    
     def generate_perturbing_samples(self, batch_size):
         existing_data = load_data(args.output_file)
         original_data = existing_data.get("original", [])
         sampled_data = existing_data.get("sampled", [])
-
+        
         if not original_data or not sampled_data:
             raise ValueError("Original and sampled data must be present in the loaded file to generate augmented samples.")
         if len(original_data) != len(sampled_data):
             raise ValueError("Mismatch between original and sampled data lengths.")
 
+        embedding = Embedding(self.args.embedding)
+        embedding_model = embedding.models[self.args.embedding]
         ######################################################
         # perturbing_percents = [1, 2, 5, 10, 20]
         perturbing_percents = [5]
@@ -171,7 +94,7 @@ class DataBuilder:
             # Generate perturbations for each percentage
             for similarity_threshold in similarity_thresholds:
                 for percent in perturbing_percents:
-                    perturb_batch = self._sample_from_word2vec(sampled_batch, percent, similarity_threshold)
+                    perturb_batch = self._sample_from_embedding(sampled_batch, embedding_model, percent, similarity_threshold)
                     for o, s, a in zip(original_batch, sampled_batch, perturb_batch):               
                         o, s, a = self._trim_to_shorter_length(o, s, a)
                         ######################################################
@@ -202,6 +125,7 @@ if __name__ == '__main__':
     parser.add_argument('--cache_dir', type=str, default="../cache")
     parser.add_argument('--perturbing_percnt', type=str, default='False')
     parser.add_argument('--similarity_threshold', type=str, default='True')
+    parser.add_argument('--embedding', type=str, default="word2vec")
     args = parser.parse_args()
 
     os.environ["XDG_CACHE_HOME"] = args.cache_dir
@@ -219,6 +143,6 @@ if __name__ == '__main__':
     data_builder = DataBuilder(args)
     perturbing_data = data_builder.generate_perturbing_samples(batch_size=args.batch_size)
     if args.perturbing_percnt == 'True':
-        append_change_to_file(args.output_file, perturbing_data,data_name="perturb_word2vec_percent")
+        append_change_to_file(args.output_file, perturbing_data,data_name=f"perturb_{args.embedding}_percent")
     if args.similarity_threshold == 'True':
-        append_change_to_file(args.output_file, perturbing_data,data_name="perturb_word2vec_threshold")
+        append_change_to_file(args.output_file, perturbing_data,data_name=f"perturb_{args.embedding}_threshold")
