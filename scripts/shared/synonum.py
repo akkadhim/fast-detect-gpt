@@ -81,6 +81,7 @@ def synonum_by_word2vec(doc, embedding_model, percentage, similarity_threshold):
     return aug_text
 
 def synonum_by_embedding(doc, embedding, percentage):
+    changed_count = 0
     aug_text = '' 
     sentences = doc.split('. ')
     for sentence in sentences:
@@ -115,11 +116,12 @@ def synonum_by_embedding(doc, embedding, percentage):
                                 for word in new_sentence
                             ]
                             num_replaced += 1
+                            changed_count += 1
                     # Stop after replacing the target number of words
                     if num_replaced >= num_to_replace:
                         break
 
         aug_text = aug_text + ' '.join(new_sentence) + '. '
-    return aug_text
+    return aug_text, changed_count
 
 

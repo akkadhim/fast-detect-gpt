@@ -1,9 +1,6 @@
-import text_organizer
 import numpy as np
 import fasttext
 from gensim.models import Word2Vec
-from directories import dicrectories
-from tools import tools
 import random
 import tensorflow as tf
 import tensorflow_hub as hub
@@ -12,6 +9,16 @@ from transformers import BertTokenizer, BertModel
 import nltk
 nltk.download('punkt')
 nltk.download('punkt_tab')
+import os
+import sys
+
+parent_dir = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, parent_dir)
+import text_organizer
+from directories import dicrectories
+from tools import tools
+sys.path.pop(0)
+
  
 class Embedding:
     MODELS = ['glove', 'fasttext', 'word2vec', 'tmae', 'elmo', 'bert']
@@ -39,7 +46,7 @@ class Embedding:
         elif model_name == "bert":
             self.load_bert_model("IMDB/pretrained_bert")
         elif model_name == "tmae":
-            self.load_tmae_model('IMDB/tmae_vectorizer_X.pickle')
+            self.load_tmae_model('embedding_files/datasets/tm_1billion/vectorizer_X.pickle')
       
     def cosine_similarity(self, vec1, vec2):
         dot_product = np.dot(vec1, vec2)
