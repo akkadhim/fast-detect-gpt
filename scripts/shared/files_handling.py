@@ -31,10 +31,16 @@ def load_data(input_file):
         print(f"Raw data loaded from {data_file}")
     return data
 
+def save_perturb_data(output_file, perturbs):
+    data_file = f"{output_file}.raw_data.json"
+    with open(data_file, "w") as fout:
+        json.dump(perturbs, fout, indent=4)
+        print(f"Prturbs data saved {data_file}.")
+
 def save_embedding_results(output_file, name, embedding, predictions):
     print(f"Real mean/std: {np.mean(predictions['real']):.2f}/{np.std(predictions['real']):.2f}, "
-          f"Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}")
-    print(f"{embedding} mean/std: {np.mean(predictions['perturb']):.2f}/{np.std(predictions['perturb']):.2f}")
+          f"Samples mean/std: {np.mean(predictions['samples']):.2f}/{np.std(predictions['samples']):.2f}, "
+          f"{embedding} mean/std: {np.mean(predictions['perturb']):.2f}/{np.std(predictions['perturb']):.2f}")
 
     fpr, tpr, roc_auc = get_roc_metrics(predictions['real'], predictions['samples'])
     p, r, pr_auc = get_precision_recall_metrics(predictions['real'], predictions['samples'])
