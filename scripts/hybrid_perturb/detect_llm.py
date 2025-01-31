@@ -9,7 +9,6 @@ import torch.nn.functional as F
 import tqdm
 import argparse
 import os
-from scripts.shared.model import load_tokenizer, load_model
 import sys
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, parent_dir)
