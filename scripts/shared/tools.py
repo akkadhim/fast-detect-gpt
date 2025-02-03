@@ -1,8 +1,5 @@
-import codecs
 import pickle
-import numpy as np
 from functools import lru_cache
-import codecs
 from scripts.shared.directories import dicrectories
 
 class tools:      

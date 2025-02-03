@@ -71,7 +71,7 @@ class DataBuilder:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_file', type=str, default="exp_main/data/hybrid_perturb/writing_gpt2-xl")
+    parser.add_argument('--output_file', type=str, default="exp_main/data/hybrid/writing_gpt2-xl")
     parser.add_argument('--dataset', type=str, default="writing")
     parser.add_argument('--n_samples', type=int, default=500)
     parser.add_argument('--openai_base', type=str, default=None)

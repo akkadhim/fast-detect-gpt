@@ -36,17 +36,17 @@ class Embedding:
             "bert": None,
         }
         if model_name == "glove":
-            self.load_glove_embeddings('IMDB/glove_vectors.txt')
+            self.load_glove_embeddings('embedding_files/datasets/glove_imdb_20k/vectors.txt')
         elif model_name == "fasttext":
-            self.load_fasttext_model('IMDB/fasttext_model.bin')
+            self.load_fasttext_model('embedding_files/datasets/fasttext_imdb_20k/fasttext_model.bin')
         elif model_name == "word2vec":
-            self.load_word2vec_model('embedding_files/datasets/word2vec_1billion/custom_word2vec.model')
+            self.load_word2vec_model('embedding_files/datasets/word2vec_imdb_20k/custom_word2vec.model')
         elif model_name == "elmo":
             self.load_elmo_model("https://tfhub.dev/google/elmo/3")
         elif model_name == "bert":
-            self.load_bert_model("IMDB/pretrained_bert")
+            self.load_bert_model("embedding_files/datasets/bert_imdb_20k")
         elif model_name == "tmae":
-            self.load_tmae_model('embedding_files/datasets/tm_1billion/vectorizer_X.pickle')
+            self.load_tmae_model('embedding_files/datasets/tm_imdb_20k/vectorizer_X.pickle')
       
     def cosine_similarity(self, vec1, vec2):
         dot_product = np.dot(vec1, vec2)
@@ -127,6 +127,7 @@ class Embedding:
         tokens = [word.lower() for word in vocabulary if word != '']  # Filter out empty strings
         elmo_model = self.models["elmo"]
         
+        # tried on Jupyter Notebook, Ubuntu 22.04.4 LTS, NVIDIA A100 
         embeddings = (elmo_model.signatures['default'](tf.constant(tokens))["elmo"]).numpy()
         self.elmo_doc_tokens = tokens
         self.elmo_doc_embeddings = {token: embeddings[i] for i, token in enumerate(tokens)}

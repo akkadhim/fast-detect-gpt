@@ -81,6 +81,11 @@ def synonum_by_word2vec(doc, embedding_model, percentage, similarity_threshold):
     return aug_text
 
 def synonum_by_embedding(doc, embedding, percentage):
+    if (embedding.model_name == "elmo"):
+        embedding.build_elmo_doc_embeddings(doc)
+    elif (embedding.model_name == "bert"):
+        embedding.build_bert_doc_embeddings(doc)
+        
     changed_count = 0
     aug_text = '' 
     sentences = doc.split('. ')
@@ -109,7 +114,7 @@ def synonum_by_embedding(doc, embedding, percentage):
                     synonym = random.choice(list(synonyms))
                     if synonym:
                         embedding_word = embedding.word_replacement(synonym)
-                        if embedding_word != None:
+                        if embedding_word != None and embedding_word != []:
                             # Replace only the matching words, preserving the original format
                             new_sentence = [
                                 embedding_word if word.lower() == random_word else word
